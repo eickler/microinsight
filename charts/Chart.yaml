@@ -1,0 +1,6 @@
+apiVersion: v2
+name: microinsight
+description: A tool to write microservice resource usage to MySQL
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

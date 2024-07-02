@@ -1,0 +1,14 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/eickler/microinsight
+  tag: latest
+  pullSecrets: regcred # Note: This value is currently also used in the code.
+
+db:
+  host: "localhost"
+  user: "mysql"
+  pass: "mysql"
+  name: "mysql"
+
+loglevel: "info"
