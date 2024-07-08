@@ -9,6 +9,6 @@ db:
   host: "localhost"
   user: "mysql"
   pass: "mysql"
-  name: "mysql"
+  name: "mydb"
 
 loglevel: "info"

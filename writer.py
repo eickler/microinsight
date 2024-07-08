@@ -1,9 +1,10 @@
 import logging
 import os
+from datetime import datetime
 # Connection pool has by default up to 100 connections in parallel and does retries.
 import pymysqlpool
 
-# The interval in seconds to which the timestamps are truncated, so that the measurements can be matched.
+# The size of the timestamp buckets
 INTERVAL = 15
 
 def get_env_or_throw(name):
@@ -17,7 +18,7 @@ class Writer:
         self.pool = pymysqlpool.ConnectionPool(
             host=get_env_or_throw('DB_HOST'),
             user=get_env_or_throw('DB_USER'),
-            password=get_env_or_throw('DB_PASSWORD'),
+            password=get_env_or_throw('DB_PASS'),
             database=get_env_or_throw('DB_NAME')
         )
         self.create_table_if_needed()
@@ -40,23 +41,28 @@ class Writer:
             connection.commit()
 
     def map(self, labels):
+        environment = pod = container = col_name = None
         for label in labels:
-            if label.name == 'container_label_io_kubernetes_pod_name' or label.name == 'cluster':
+            if label.name == 'container_label_io_kubernetes_pod_name' or label.name == 'pod':
                 pod = label.value
-            elif label.name == 'container_label_io_kubernetes_pod_name' or label.name == 'pod':
+            elif label.name == 'container_label_io_kubernetes_container_name' or label.name == 'container':
                 container = label.value
-            elif label.name == 'cumulocity_environment' or label.name == 'cluster':
+            elif label.name == 'cluster' or label.name == 'cumulocity_environment':
                 environment = label.value
+            elif label.name == 'resource':
+                resource = label.value
             elif label.name == '__name__':
                 dp_name = label.value
+
         if dp_name == 'container_cpu_usage_seconds_total':
             col_name = 'cpu_usage_total'
-        elif dp_name == 'container_cpu_limit':
-            col_name = 'cpu_limit'
-        elif dp_name == 'container_memory_usage_bytes':
+        elif dp_name == 'container_memory_working_set_bytes':
             col_name = 'memory_usage'
-        elif dp_name == 'container_memory_limit_bytes':
-            col_name = 'memory_limit'
+        elif dp_name == 'kube_pod_container_resource_limits':
+            if resource == 'cpu':
+                col_name = 'cpu_limit'
+            elif resource == 'memory':
+                col_name = 'memory_limit'
         return environment, pod, container, col_name
 
     # If straight single insertion is too slow, we can also batch the insertions from a buffer.
@@ -64,17 +70,17 @@ class Writer:
         with self.pool.get_connection() as connection, connection.cursor() as cursor:
             for ts in write_request.timeseries:
                 (environment, pod, container, name) = self.map(ts.labels)
-                if name is None:
+                if environment is None or pod is None or container is None or name is None:
                     continue
                 query = f"""
                     INSERT INTO micrometrics (time, environment, pod, container, {name})
-                    VALUES (%s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s)
                     ON DUPLICATE KEY UPDATE
                     {name} = VALUES({name})
                 """.format(name=name)
                 for sample in ts.samples:
-                    # Truncate the timestamp to the nearest lower INTERVAL second interval.
-                    sample.timestamp = int(sample.timestamp / INTERVAL) * INTERVAL
-                    logging.debug(f'Inserting {sample.timestamp} {environment} {pod} {container} {name} {sample.value}')
-                    cursor.execute(query, (environment, pod, container, sample.timestamp, sample.value))
+                    timestamp_trunc_secs = int(sample.timestamp / 1000.0 / INTERVAL) * INTERVAL
+                    timestamp_datetime = datetime.fromtimestamp(timestamp_trunc_secs)
+                    logging.debug(f'Inserting {timestamp_datetime} {environment} {pod} {container} {name} {sample.value}')
+                    cursor.execute(query, (timestamp_datetime, environment, pod, container, sample.value))
             connection.commit()
