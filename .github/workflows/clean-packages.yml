@@ -11,8 +11,8 @@ jobs:
     steps:
       - uses: actions/delete-package-versions@v5
         with:
-          package-name: 'rumsimop'
-          package-type: 'container'
+          package-name: "microinsight"
+          package-type: "container"
           min-versions-to-keep: 10
-          delete-only-untagged-versions: 'true'
+          delete-only-untagged-versions: "true"
           token: ${{ secrets.CLEANER_TOKEN }}

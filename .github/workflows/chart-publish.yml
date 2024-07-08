@@ -17,7 +17,9 @@ jobs:
 
       - name: Package Helm chart
         run: |
-          helm package charts --destination . # --version ${{ github.ref }}
+          VERSION=$(echo ${{ github.ref }} | sed 's/refs\/tags\///')
+          echo "Packaging Helm chart version $VERSION"
+          helm package charts --destination . --version $VERSION
 
       - name: Checkout "charts" repository
         uses: actions/checkout@v4
