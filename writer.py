@@ -5,7 +5,7 @@ from datetime import datetime
 import pymysqlpool
 
 # The size of the timestamp buckets
-INTERVAL = 15
+INTERVAL = os.getenv('INTERVAL', 5)
 
 def get_env_or_throw(name):
     value = os.getenv(name)
