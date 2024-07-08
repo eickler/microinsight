@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/eickler/microinsight/compare/v0.1.0...v0.1.1) (2024-07-08)
+
+
+### Bug Fixes
+
+* Fixing the actions flow ([411ef0d](https://github.com/eickler/microinsight/commit/411ef0d3981264050fd70c418e77bfa0ace4b87e))
+
 ## 0.1.0 (2024-07-08)
 
 
