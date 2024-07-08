@@ -5,7 +5,8 @@ RUN pip install --prefix="/install" -r requirements.txt
 
 FROM python:alpine
 COPY --from=builder /install /usr/local
-COPY *.py gogoproto/gogo_pb2.py /
+COPY *.py /
+COPY gogoproto/ /gogoproto/
 EXPOSE 80
 ENTRYPOINT ["python"]
 CMD ["-u", "microinsight.py"]

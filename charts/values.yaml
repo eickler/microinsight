@@ -6,9 +6,9 @@ image:
   pullSecrets: regcred # Note: This value is currently also used in the code.
 
 db:
-  host: "localhost"
+  host: "mycluster"
   user: "mysql"
   pass: "mysql"
   name: "mydb"
 
-loglevel: "info"
+loglevel: "INFO"
