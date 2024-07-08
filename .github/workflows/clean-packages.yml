@@ -1,0 +1,18 @@
+name: Clean up packages
+
+on:
+  schedule:
+    - cron: "0 22 * * *"
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/delete-package-versions@v5
+        with:
+          package-name: 'rumsimop'
+          package-type: 'container'
+          min-versions-to-keep: 10
+          delete-only-untagged-versions: 'true'
+          token: ${{ secrets.CLEANER_TOKEN }}
