@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/eickler/microinsight/compare/v0.1.1...v0.1.2) (2024-07-08)
+
+
+### Bug Fixes
+
+* Forgot to delete the Chart manipulation action ([877d4d4](https://github.com/eickler/microinsight/commit/877d4d436591f3dbb762054fb407f7eaa7cb7cb1))
+
 ## [0.1.1](https://github.com/eickler/microinsight/compare/v0.1.0...v0.1.1) (2024-07-08)
 
 
