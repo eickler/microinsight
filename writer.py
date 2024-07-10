@@ -5,7 +5,7 @@ from datetime import datetime
 import pymysqlpool
 
 # The size of the timestamp buckets
-INTERVAL = os.getenv('INTERVAL', 5)
+INTERVAL = os.getenv('INTERVAL', 15)
 
 LABEL_TO_COLUMN = {
     'container_label_io_kubernetes_pod_name': 'pod',
@@ -43,12 +43,13 @@ class Writer:
 
     def create_table_if_needed(self):
         with self.pool.get_connection() as connection, connection.cursor() as cursor:
+            # Idiotically, MySQL can have keys only up to 3K in size, so I need to cut the strings.
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS micrometrics (
                     time TIMESTAMP,
-                    environment VARCHAR(1000),
-                    pod VARCHAR(1000),
-                    container VARCHAR(1000),
+                    environment VARCHAR(255),
+                    pod VARCHAR(255),
+                    container VARCHAR(255),
                     cpu_usage_total FLOAT,
                     cpu_limit FLOAT,
                     memory_usage FLOAT,
@@ -58,9 +59,9 @@ class Writer:
             """)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS microowner (
-                    environment VARCHAR(1000),
-                    pod VARCHAR(1000),
-                    owner VARCHAR(1000),
+                    environment VARCHAR(255),
+                    pod VARCHAR(255),
+                    owner VARCHAR(255),
                     PRIMARY KEY (environment, pod)
                 )
             """)
