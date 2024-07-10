@@ -52,7 +52,7 @@ remote_write:
   - url: http://microinsight/receive
     write_relabel_configs:
       - source_labels: [__name__]
-        regex: "kube_pod_container_resource_limits|container_cpu_usage_seconds_total|container_memory_working_set_bytes"
+        regex: "kube_pod_labels|kube_pod_container_resource_limits|container_cpu_usage_seconds_total|container_memory_working_set_bytes"
         action: keep
 ```
 
