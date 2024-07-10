@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/eickler/microinsight/compare/v0.1.2...v0.2.0) (2024-07-10)
+
+
+### Features
+
+* Separate between metrics and owner ([79f9359](https://github.com/eickler/microinsight/commit/79f935948f7d408b7357053cf57675761b98e54e))
+
+
+### Bug Fixes
+
+* Reduction of column length due to MySQL limit ([e7ea154](https://github.com/eickler/microinsight/commit/e7ea154647bf5187db51e7bb8279f0fc80ed4915))
+
 ## [0.1.2](https://github.com/eickler/microinsight/compare/v0.1.1...v0.1.2) (2024-07-08)
 
 
