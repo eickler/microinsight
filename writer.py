@@ -5,7 +5,7 @@ from datetime import datetime
 import pymysqlpool
 
 # The size of the timestamp buckets
-INTERVAL = os.getenv('INTERVAL', 15)
+INTERVAL = int(os.getenv('INTERVAL', 15))
 
 LABEL_TO_COLUMN = {
     'container_label_io_kubernetes_pod_name': 'pod',
