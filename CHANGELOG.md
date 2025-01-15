@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/eickler/microinsight/compare/v0.2.0...v0.2.1) (2025-01-15)
+
+
+### Bug Fixes
+
+* Cast interval to correct type ([edac1c0](https://github.com/eickler/microinsight/commit/edac1c04a6ecac0e47db237090c3d90afc7d7a73))
+
 ## [0.2.0](https://github.com/eickler/microinsight/compare/v0.1.2...v0.2.0) (2024-07-10)
 
 
