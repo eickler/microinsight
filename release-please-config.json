@@ -1,6 +1,6 @@
 {
   "packages": {
-    ".": {
+    "charts": {
       "release-type": "helm",
       "version-file": "charts/Chart.yaml",
       "extra-files": [
