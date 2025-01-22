@@ -1,7 +1,7 @@
 {
   "packages": {
     "charts": {
-      "release-type": "helm",
+      "release-type": "rust",
       "version-file": "charts/Chart.yaml",
       "extra-files": [
         {
