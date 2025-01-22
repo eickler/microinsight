@@ -25,6 +25,11 @@ NAME_TO_COLUMN = {
     'kube_pod_labels': 'owner'
 }
 
+POD_PREFIX_BLACKLIST = ["daemonset-", "deployment-", "kube-", "node-", "ebs-", "efs-"];
+
+def skip(r):
+    return r['container'] == "POD" or any(r['pod'].startswith(prefix) for prefix in POD_PREFIX_BLACKLIST)
+
 def get_env_or_throw(name):
     value = os.getenv(name)
     if value is None:
@@ -107,13 +112,15 @@ class Writer:
             INSERT IGNORE INTO microowner (environment, pod, owner)
             VALUES (%s, %s, %s)
         """
+        logging.debug(f'Inserting owner {r['environment']} {r['pod']} {r['owner']}')
         cursor.execute(query, (r['environment'], r['pod'], r['owner']))
 
-    # If straight single insertion is too slow, we can also batch the insertions from a buffer.
     def insert(self, write_request):
         with self.pool.get_connection() as connection, connection.cursor() as cursor:
             for ts in write_request.timeseries:
                 r = self.map(ts.labels)
+                if skip(r):
+                    continue
 
                 if r['name'] == "kube_pod_labels":
                     self.insert_owner(cursor, r, ts)

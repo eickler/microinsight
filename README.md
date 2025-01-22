@@ -67,7 +67,7 @@ Prometheus samples values at more or less arbitrary points in time. This makes i
 ```
 SELECT
   time, environment, pod,
-  100 * (cpu_usage_total - LAG(cpu_usage_total, 1) OVER (PARTITION BY environment, pod ORDER BY time)) / <INTERVAL> / cpu_limit as usage_percent
+  100 * (cpu_usage_total - LAG(cpu_usage_total, 1) OVER (PARTITION BY environment, pod, container ORDER BY time)) / <INTERVAL> / cpu_limit as usage_percent
 FROM micrometrics
 WHERE container = 'cadvisor' AND cpu_usage_total IS NOT NULL
 ORDER BY time
@@ -78,7 +78,7 @@ Note that I assume in the examples that the usage counter does not wrap or reset
 ```
 SELECT
   time, environment, pod,
-  (memory_usage / memory_limit) * (cpu_usage_total - LAG(cpu_usage_total, 1) OVER (PARTITION BY environment, pod ORDER BY time)) / 15 / cpu_limit
+  (memory_usage / memory_limit) * (cpu_usage_total - LAG(cpu_usage_total, 1) OVER (PARTITION BY environment, pod, container ORDER BY time)) / 15 / cpu_limit
 FROM micrometrics
 WHERE
   time >= CURRENT_TIMESTAMP - INTERVAL 30 DAY AND
@@ -86,13 +86,24 @@ WHERE
 ORDER BY time
 ```
 
+And here's a calculation over a month:
 
+```
+SELECT environment, pod, AVG(consumption) AS avg_consumption
+FROM (
+  SELECT
+    time, environment, pod,
+    (memory_usage / memory_limit) * (cpu_usage_total - LAG(cpu_usage_total, 1) OVER (PARTITION BY environment, pod, container ORDER BY time)) / 15 / cpu_limit AS consumption
+  FROM micrometrics
+  WHERE
+    time >= CURRENT_TIMESTAMP - INTERVAL 30 DAY AND cpu_usage_total IS NOT NULL
+) consumption
+GROUP BY environment, pod, container
+```
 
 ## TBDs
 
-* Internal: Check if there is a difference between cost for RAM and CPUs.
-* Filtering irrelevant microservices.
-* Can there be milicore values transferred by kube-state-metrics or is it always core fractions?
+* If straight single insertion is too slow, we can also batch the insertions from a buffer, reducing the updates.
 
 ## Copyright notice
 
