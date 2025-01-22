@@ -1,3 +1,4 @@
 {
-  "charts/my-chart": "0.3.0"
+  "charts/my-chart": "0.3.0",
+  "charts": "1.0.0"
 }
