@@ -8,22 +8,22 @@ It might be me, but I did not find a reproducible and reliable way to calculate 
 
 The pipeline is as follows:
 
-* The data is provided by [cadvisor](https://github.com/google/cadvisor) and [KSM](https://github.com/kubernetes/kube-state-metrics).
+* The data is provided by [cAdvisor](https://github.com/google/cadvisor) and [KSM](https://github.com/kubernetes/kube-state-metrics).
 * The data is scraped by Prometheus in regular intervals.
 * Prometheus pushes the data through remote_write to microinsight.
 * microinsight writes this into a MySQL table ``micrometrics`` (creating it if necessary).
 * Query as usual through SQL.
 
-|time|environment|pod|container|cpu_usage_total|cpu_limit|memory_usage|memory_limit|
-|---|---|---|---|--:|--:|--:|--:|
-|2024-07-08 10:59:15|demo|cadvisor-lwf24|cadvisor|53.80411|0.8|1.47968E8|2.097152E9|
-|2024-07-08 10:59:30|demo|cadvisor-lwf24|cadvisor|54.61136|0.8|1.49573632E8|2.097152E9|
-|2024-07-08 10:59:45|demo|cadvisor-lwf24|cadvisor|54.86298|0.8|1.36855552E8|2.097152E9|
+| time                | environment | pod            | container | cpu_usage_total | cpu_limit | memory_usage | memory_limit |
+| ------------------- | ----------- | -------------- | --------- | --------------: | --------: | -----------: | -----------: |
+| 2024-07-08 10:59:15 | demo        | cadvisor-lwf24 | cadvisor  |        53.80411 |       0.8 |    1.47968E8 |   2.097152E9 |
+| 2024-07-08 10:59:30 | demo        | cadvisor-lwf24 | cadvisor  |        54.61136 |       0.8 | 1.49573632E8 |   2.097152E9 |
+| 2024-07-08 10:59:45 | demo        | cadvisor-lwf24 | cadvisor  |        54.86298 |       0.8 | 1.36855552E8 |   2.097152E9 |
 
 
 ## Prerequisites
 
-* Kubernetes cluster with [cadvisor](https://github.com/google/cadvisor) and [KSM](https://github.com/kubernetes/kube-state-metrics) installed.
+* Kubernetes cluster with [cAdvisor](https://github.com/google/cadvisor) and [KSM](https://github.com/kubernetes/kube-state-metrics) installed.
 * Prometheus configured to scrape cadvisor and KSM.
 * MySQL installed, for example using the [operator](https://dev.mysql.com/doc/mysql-operator/en/mysql-operator-installation.html).
 * Helm.
@@ -58,9 +58,13 @@ remote_write:
 
 ## Fine print
 
-Prometheus samples values at more or less arbitrary points in time. This makes it more difficult to correlate actuals and limits. For that reason, microinsight puts the forwarded values into buckets of size INTERVAL (truncates to "INTERVAL" seconds).
+Prometheus samples values at more or less arbitrary points in time. This makes it more difficult to correlate actuals and limits. For that reason, microinsight puts the forwarded values into buckets of size INTERVAL (truncates to "INTERVAL" seconds). E.g., if the interval is five seconds, an actual with timestamp ``2024-07-08 10:59:15:123`` and a limit with timestamp  ``2024-07-08 10:59:16:456`` are placed into the same row. Should another actual with timestamp ``2024-07-08 10:59:19:999`` arrives, it will simply overwrite the previous actual in the row.
 
-E.g., if the interval is five seconds, an actual with timestamp ``2024-07-08 10:59:15:123`` and a limit with timestamp  ``2024-07-08 10:59:16:456`` are placed into the same row. Should another actual with timestamp ``2024-07-08 10:59:19:999`` arrives, it will simply overwrite the previous actual in the row.
+INTERVAL should be larger than the larger of the scrape_interval setting for cAdvisor and kube-state-metrics, otherwise you end up with gaps in the reporting.
+
+## TBDs
+
+* Filtering irrelevant microservices.
 
 ## Copyright notice
 
