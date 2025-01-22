@@ -11,5 +11,5 @@ db:
   pass: "mysql"
   name: "mydb"
 
-interval: 30
+interval: 60
 loglevel: "INFO"
