@@ -58,13 +58,41 @@ remote_write:
 
 ## Fine print
 
-Prometheus samples values at more or less arbitrary points in time. This makes it more difficult to correlate actuals and limits. For that reason, microinsight puts the forwarded values into buckets of size INTERVAL (truncates to "INTERVAL" seconds). E.g., if the interval is five seconds, an actual with timestamp ``2024-07-08 10:59:15:123`` and a limit with timestamp  ``2024-07-08 10:59:16:456`` are placed into the same row. Should another actual with timestamp ``2024-07-08 10:59:19:999`` arrives, it will simply overwrite the previous actual in the row.
+Prometheus samples values at more or less arbitrary points in time. This makes it more difficult to correlate actuals and limits. For that reason, microinsight puts the forwarded values into buckets of size ``INTERVAL`` (truncates to ``INTERVAL`` seconds). E.g., if the interval is five seconds, an actual with timestamp ``2024-07-08 10:59:15:123`` and a limit with timestamp  ``2024-07-08 10:59:16:456`` are placed into the same row. Should another actual with timestamp ``2024-07-08 10:59:19:999`` arrives, it will simply overwrite the previous actual in the row.
 
-INTERVAL should be larger than the larger of the scrape_interval setting for cAdvisor and kube-state-metrics, otherwise you end up with gaps in the reporting.
+``INTERVAL`` should be larger than the larger of the ``scrape_interval`` setting for cAdvisor and kube-state-metrics, otherwise you end up with gaps in the reporting.
+
+``cpu_usage_total`` is a cumulative counter of the consumed CPU in seconds. So to find out what was actually consumed since the last measurement, you would need to subtract the last measured value. For example,
+
+```
+SELECT
+  time, environment, pod,
+  100 * (cpu_usage_total - LAG(cpu_usage_total, 1) OVER (PARTITION BY environment, pod ORDER BY time)) / <INTERVAL> / cpu_limit as usage_percent
+FROM micrometrics
+WHERE container = 'cadvisor' AND cpu_usage_total IS NOT NULL
+ORDER BY time
+```
+
+Note that I assume in the examples that the usage counter does not wrap or reset meanwhile. Not sure if that happens in practice. Memory usage is always a sample, which makes it easier to add it to the calculation:
+
+```
+SELECT
+  time, environment, pod,
+  (memory_usage / memory_limit) * (cpu_usage_total - LAG(cpu_usage_total, 1) OVER (PARTITION BY environment, pod ORDER BY time)) / 15 / cpu_limit
+FROM micrometrics
+WHERE
+  time >= CURRENT_TIMESTAMP - INTERVAL 30 DAY AND
+  container = 'cadvisor' AND cpu_usage_total IS NOT NULL
+ORDER BY time
+```
+
+
 
 ## TBDs
 
+* Internal: Check if there is a difference between cost for RAM and CPUs.
 * Filtering irrelevant microservices.
+* Can there be milicore values transferred by kube-state-metrics or is it always core fractions?
 
 ## Copyright notice
 
