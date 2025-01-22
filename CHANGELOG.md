@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/eickler/microinsight/compare/v0.2.2...v0.3.0) (2025-01-22)
+
+
+### Features
+
+* Blacklisting of system pods ([cb5b99f](https://github.com/eickler/microinsight/commit/cb5b99f7b3e8933fa7769c1ea6915eb005cd9a43))
+
 ## [0.2.2](https://github.com/eickler/microinsight/compare/v0.2.1...v0.2.2) (2025-01-22)
 
 
