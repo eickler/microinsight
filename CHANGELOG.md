@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/eickler/microinsight/compare/v0.2.1...v0.2.2) (2025-01-22)
+
+
+### Bug Fixes
+
+* Default interval reduced ([fa82690](https://github.com/eickler/microinsight/commit/fa826908293942724dab10c455f024926d829142))
+
 ## [0.2.1](https://github.com/eickler/microinsight/compare/v0.2.0...v0.2.1) (2025-01-15)
 
 
