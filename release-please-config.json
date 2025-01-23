@@ -1,11 +1,11 @@
 {
   "packages": {
-    "charts": {
+    ".": {
       "release-type": "helm",
-      "version-file": "Chart.yaml",
+      "version-file": "charts/Chart.yaml",
       "extra-files": [
         {
-          "path": "values.yaml",
+          "path": "charts/values.yaml",
           "type": "yaml",
           "key": "image.tag"
         }
