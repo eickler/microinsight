@@ -3,4 +3,4 @@ name: microinsight
 description: A tool to write microservice resource usage to MySQL
 type: application
 version: 1.0.0
-appVersion: v1.0.1
+appVersion: v0.3.0

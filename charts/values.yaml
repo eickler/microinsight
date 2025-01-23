@@ -2,7 +2,7 @@ replicaCount: 1
 
 image:
   repository: ghcr.io/eickler/microinsight
-  tag: v1.0.1
+  tag: v0.3.0
   pullSecrets: regcred # Note: This value is currently also used in the code.
 
 db:
