@@ -4,6 +4,7 @@
       "release-type": "helm",
       "version-file": "Chart.yaml",
       "component": "",
+      "package-name": "",
       "extra-files": [
         {
           "path": "values.yaml",
