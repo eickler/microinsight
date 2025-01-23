@@ -1,15 +1,18 @@
 {
   "packages": {
-    "charts": {
-      "release-type": "helm",
-      "version-file": "Chart.yaml",
-      "component": "",
+    ".": {
+      "release-type": "simple",
       "package-name": "",
       "extra-files": [
         {
-          "path": "values.yaml",
+          "path": "charts/values.yaml",
           "type": "yaml",
           "key": "image.tag"
+        },
+        {
+          "path": "charts/Chart.yaml",
+          "type": "yaml",
+          "key": "appVersion"
         }
       ]
     }
