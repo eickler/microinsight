@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/eickler/microinsight/compare/v0.4.1...v0.4.2) (2025-02-03)
+
+
+### Bug Fixes
+
+* Bla ([0a996e4](https://github.com/eickler/microinsight/commit/0a996e47b1f48a6e9c5f6f7929826364353b9892))
+
 ## [0.4.1](https://github.com/eickler/microinsight/compare/v0.4.0...v0.4.1) (2025-02-03)
 
 
