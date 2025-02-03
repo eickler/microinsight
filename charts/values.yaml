@@ -1,15 +1,12 @@
 replicaCount: 1
-
 image:
   repository: ghcr.io/eickler/microinsight
-  tag: v0.3.0
-  pullSecrets: regcred # Note: This value is currently also used in the code.
-
+  tag: 0.4.0
+  pullSecrets: regcred
 db:
-  host: "mycluster"
-  user: "mysql"
-  pass: "mysql"
-  name: "mydb"
-
+  host: mycluster
+  user: mysql
+  pass: mysql
+  name: mydb
 interval: 60
-loglevel: "INFO"
+loglevel: INFO
