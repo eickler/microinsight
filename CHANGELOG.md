@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/eickler/microinsight/compare/v0.4.0...v0.4.1) (2025-02-03)
+
+
+### Bug Fixes
+
+* Helm type seems to mess up version prefix ([0254dcc](https://github.com/eickler/microinsight/commit/0254dcc8952023dea384405d4e9cc16278858e15))
+
 ## [0.4.0](https://github.com/eickler/microinsight/compare/v0.3.0...v0.4.0) (2025-02-03)
 
 
