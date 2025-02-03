@@ -1,11 +1,12 @@
 import logging
 import os
 from datetime import datetime
+import threading
 # Connection pool has by default up to 100 connections in parallel and does retries.
 import pymysqlpool
 
 # The size of the timestamp buckets
-INTERVAL = int(os.getenv('INTERVAL', 15))
+INTERVAL = int(os.getenv('INTERVAL', 60))
 
 LABEL_TO_COLUMN = {
     'container_label_io_kubernetes_pod_name': 'pod',
@@ -45,6 +46,9 @@ class Writer:
             database=get_env_or_throw('DB_NAME')
         )
         self.create_table_if_needed()
+        self.current_bucket = {}
+        self.last_bucket = {}
+        self.lock = threading.Lock()
 
     def create_table_if_needed(self):
         with self.pool.get_connection() as connection, connection.cursor() as cursor:
@@ -55,7 +59,7 @@ class Writer:
                     environment VARCHAR(255),
                     pod VARCHAR(255),
                     container VARCHAR(255),
-                    cpu_usage_total FLOAT,
+                    cpu_usage FLOAT,
                     cpu_limit FLOAT,
                     memory_usage FLOAT,
                     memory_limit FLOAT,
@@ -76,7 +80,7 @@ class Writer:
         result = { 'name': None, 'environment': None, 'pod': None, 'container': None, 'owner': None }
         for label in labels:
             if label.name in LABEL_TO_COLUMN:
-                result[LABEL_TO_COLUMN[label.name]] = label.value
+                result[LABEL_TO_COLUMN[label.name]] = label.value.substr(0, 240) # Some margin for multi-byte issues.
 
         if result['dp_name'] in NAME_TO_COLUMN:
             result['name'] = NAME_TO_COLUMN[result['dp_name']]
@@ -88,6 +92,22 @@ class Writer:
 
         return result
 
+    def flush_current_bucket(self, cursor):
+        for key, metrics in self.current_bucket.items():
+            environment, pod, container = key
+            for metric_name, value in metrics.items():
+                query = f"""
+                    INSERT INTO micrometrics (time, environment, pod, container, {metric_name})
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                    {metric_name} = VALUES({metric_name})
+                """
+                timestamp_datetime = datetime.fromtimestamp(self.current_timestamp)
+                logging.debug(f'Inserting {timestamp_datetime} {environment} {pod} {container} {metric_name} {value}')
+                cursor.execute(query, (timestamp_datetime, environment, pod, container, value))
+        self.last_bucket = self.current_bucket
+        self.current_bucket = {}
+
     def insert_metrics(self, cursor, r, ts):
         if r['environment'] is None or r['pod'] is None or r['container'] is None or r['name'] is None:
             return
@@ -98,6 +118,7 @@ class Writer:
             ON DUPLICATE KEY UPDATE
             {r['name']} = VALUES({r['name']})
         """
+        logging.info(f'Inserting {len(ts.samples)} samples')
         for sample in ts.samples:
             timestamp_trunc_secs = int(sample.timestamp / 1000.0 / INTERVAL) * INTERVAL
             timestamp_datetime = datetime.fromtimestamp(timestamp_trunc_secs)
@@ -117,13 +138,28 @@ class Writer:
 
     def insert(self, write_request):
         with self.pool.get_connection() as connection, connection.cursor() as cursor:
-            for ts in write_request.timeseries:
-                r = self.map(ts.labels)
-                if skip(r):
-                    continue
+            with self.lock:
+                logging.info(f'Processing {len(write_request.timeseries)} timeseries')
+                for ts in write_request.timeseries:
+                    r = self.map(ts.labels)
+                    if skip(r):
+                        continue
 
-                if r['name'] == "kube_pod_labels":
-                    self.insert_owner(cursor, r, ts)
-                else:
-                    self.insert_metrics(cursor, r, ts)
+                    sorted_samples = sorted(ts.samples, key=lambda sample: sample.timestamp)
+
+                    # If guess we can also not assume that the different timeseries are timestamp-ordered
+                    # So maybe we should process the entire request first and parition it where needed.
+                    # That would also have the benefit that the lock is not required during the entire processing.
+
+                    timestamp_trunc_secs = int(ts.samples[0].timestamp / 1000.0 / INTERVAL) * INTERVAL
+                    if timestamp_trunc_secs != getattr(self, 'current_timestamp', None):
+                        if hasattr(self, 'current_timestamp'):
+                            self.flush_current_bucket(cursor)
+                        self.current_timestamp = timestamp_trunc_secs
+
+                    key = (r['environment'], r['pod'], r['container'])
+                    if key not in self.current_bucket:
+                        self.current_bucket[key] = {}
+                    self.current_bucket[key][r['name']] = ts.samples[0].value
+
             connection.commit()
