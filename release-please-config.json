@@ -1,18 +1,13 @@
 {
   "packages": {
     ".": {
-      "release-type": "simple",
+      "release-type": "helm",
       "package-name": "",
       "extra-files": [
         {
           "path": "charts/values.yaml",
           "type": "yaml",
           "jsonpath": "$.image.tag"
-        },
-        {
-          "path": "charts/Chart.yaml",
-          "type": "yaml",
-          "jsonpath": "$.appVersion"
         }
       ]
     }
