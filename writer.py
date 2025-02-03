@@ -98,6 +98,7 @@ class Writer:
             ON DUPLICATE KEY UPDATE
             {r['name']} = VALUES({r['name']})
         """
+        logging.debug(f'Inserting {len(ts.samples)} samples')
         for sample in ts.samples:
             timestamp_trunc_secs = int(sample.timestamp / 1000.0 / INTERVAL) * INTERVAL
             timestamp_datetime = datetime.fromtimestamp(timestamp_trunc_secs)
@@ -117,6 +118,7 @@ class Writer:
 
     def insert(self, write_request):
         with self.pool.get_connection() as connection, connection.cursor() as cursor:
+            logging.debug(f'Inserting {len(write_request.timeseries)} timeseries')
             for ts in write_request.timeseries:
                 r = self.map(ts.labels)
                 if skip(r):
