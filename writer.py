@@ -28,7 +28,7 @@ NAME_TO_COLUMN = {
 POD_PREFIX_BLACKLIST = ["daemonset-", "deployment-", "kube-", "node-", "ebs-", "efs-"];
 
 def skip(r):
-    return r['container'] == "POD" or any(r['pod'].startswith(prefix) for prefix in POD_PREFIX_BLACKLIST)
+    return r['container'] == "POD" or not r['pod'] or any(r['pod'].startswith(prefix) for prefix in POD_PREFIX_BLACKLIST)
 
 def get_env_or_throw(name):
     value = os.getenv(name)

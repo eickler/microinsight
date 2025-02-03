@@ -17,6 +17,7 @@ spec:
       containers:
         - name: microinsight
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: Always
           env:
             - name: DB_HOST
               valueFrom:
