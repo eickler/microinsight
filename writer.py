@@ -7,6 +7,7 @@ import pymysqlpool
 
 # The size of the timestamp buckets
 INTERVAL = int(os.getenv('INTERVAL', 60))
+MAX_DELAY = int(os.getenv('MAX_DELAY', 5))
 
 LABEL_TO_COLUMN = {
     'container_label_io_kubernetes_pod_name': 'pod',
@@ -21,7 +22,7 @@ LABEL_TO_COLUMN = {
 }
 
 NAME_TO_COLUMN = {
-    'container_cpu_usage_seconds_total': 'cpu_usage_total',
+    'container_cpu_usage_seconds_total': 'cpu_usage',
     'container_memory_working_set_bytes': 'memory_usage',
     'kube_pod_labels': 'owner'
 }
@@ -37,6 +38,62 @@ def get_env_or_throw(name):
         raise ValueError(f'{name} not set')
     return value
 
+# BatchBuffer keeps data for max_delay intervals to capture late data.
+# `insert` buckets samples into the interval batches and returns the oldest batch if it is time to flush it, minimizing locking.
+class BatchBuffer:
+    def __init__(self, interval, max_delay, watermark):
+        self.interval = interval
+        self.max_delay = max_delay
+        self.watermark = watermark
+        self.batches = []
+        # Lock to synchronize access to the watermark and the batches, since we may get concurrent requests.
+        self.lock = threading.Lock()
+
+    def _truncate_timestamp(self, timestamp):
+        return int(timestamp / 1000.0 / self.interval) * self.interval
+
+    def _get_slot_index(self, timestamp):
+        index = (timestamp - self.watermark) // self.interval
+        while len(self.batches) <= index:
+            self.batches.append({})
+        return index
+
+    def _insert_samples(self, r, ts):
+        for sample in ts.samples:
+            timestamp_trunc_secs = self._truncate_timestamp(sample.timestamp)
+            slot_index = self._get_slot_index(timestamp_trunc_secs)
+            key = (r['environment'], r['pod'], r['container'])
+            if key not in self.batches[slot_index]:
+                self.batches[slot_index][key] = {
+                    'cpu_usage': None,
+                    'cpu_limit': None,
+                    'memory_usage': None,
+                    'memory_limit': None
+                }
+
+            # CPU usage of the interval can only be calculated if there is a previous value and that value did not wrap.
+            if r['name'] == 'cpu_usage' and slot_index > 0 and self.batches[slot_index-1][key]['cpu_usage'] is not None and r['value'] >= self.batches[slot_index-1][key]['cpu_usage'] is None:
+                r['value'] -= self.batches[slot_index-1][key]['cpu_usage']
+
+            self.batches[slot_index][key][r['name']] = sample.value
+
+    def _flush_candidate(self):
+        if len(self.batches) >= self.max_delay:
+            oldest_batch = self.batches.pop(0)
+            oldest_watermark = self.watermark
+            self.watermark += self.interval
+            return oldest_batch, oldest_watermark
+
+        return None, None
+
+    def insert(self, r, ts):
+        with self.lock:
+            self._insert_samples(r, ts)
+            return self._flush_candidate()
+
+# Digest the Prometheus write requests, post process them and write them to the database in batches.
+# This takes late data into account using BatchBuffer.
+# It also writes batches to the database in one go as a batch write.
 class Writer:
     def __init__(self):
         self.pool = pymysqlpool.ConnectionPool(
@@ -46,9 +103,7 @@ class Writer:
             database=get_env_or_throw('DB_NAME')
         )
         self.create_table_if_needed()
-        self.current_bucket = {}
-        self.last_bucket = {}
-        self.lock = threading.Lock()
+        self.batch_buffer = BatchBuffer(INTERVAL, MAX_DELAY)
 
     def create_table_if_needed(self):
         with self.pool.get_connection() as connection, connection.cursor() as cursor:
@@ -80,7 +135,7 @@ class Writer:
         result = { 'name': None, 'environment': None, 'pod': None, 'container': None, 'owner': None }
         for label in labels:
             if label.name in LABEL_TO_COLUMN:
-                result[LABEL_TO_COLUMN[label.name]] = label.value.substr(0, 240) # Some margin for multi-byte issues.
+                result[LABEL_TO_COLUMN[label.name]] = label.value
 
         if result['dp_name'] in NAME_TO_COLUMN:
             result['name'] = NAME_TO_COLUMN[result['dp_name']]
@@ -92,74 +147,62 @@ class Writer:
 
         return result
 
-    def flush_current_bucket(self, cursor):
-        for key, metrics in self.current_bucket.items():
-            environment, pod, container = key
-            for metric_name, value in metrics.items():
-                query = f"""
-                    INSERT INTO micrometrics (time, environment, pod, container, {metric_name})
-                    VALUES (%s, %s, %s, %s, %s)
-                    ON DUPLICATE KEY UPDATE
-                    {metric_name} = VALUES({metric_name})
-                """
-                timestamp_datetime = datetime.fromtimestamp(self.current_timestamp)
-                logging.debug(f'Inserting {timestamp_datetime} {environment} {pod} {container} {metric_name} {value}')
-                cursor.execute(query, (timestamp_datetime, environment, pod, container, value))
-        self.last_bucket = self.current_bucket
-        self.current_bucket = {}
+    def insert_metrics(self, r, ts):
+        flush_batch, timestamp = self.batch_buffer.insert(r, ts)
+        if flush_batch:
+            self.write_batch_to_db(flush_batch, timestamp)
 
-    def insert_metrics(self, cursor, r, ts):
-        if r['environment'] is None or r['pod'] is None or r['container'] is None or r['name'] is None:
-            return
+    def write_batch_to_db(self, batch, timestamp):
+        with self.pool.get_connection() as connection, connection.cursor() as cursor:
+            timestamp_datetime = datetime.fromtimestamp(timestamp)
+            insert_values = []
+            for key, metrics in batch.items():
+                environment, pod, container = key
+                insert_values.append((
+                    timestamp_datetime, environment, pod, container,
+                    metrics['cpu_usage'], metrics['cpu_limit'],
+                    metrics['memory_usage'], metrics['memory_limit']
+                ))
 
-        query = f"""
-            INSERT INTO micrometrics (time, environment, pod, container, {r['name']})
-            VALUES (%s, %s, %s, %s, %s)
-            ON DUPLICATE KEY UPDATE
-            {r['name']} = VALUES({r['name']})
-        """
-        logging.debug(f'Inserting {len(ts.samples)} samples')
-        for sample in ts.samples:
-            timestamp_trunc_secs = int(sample.timestamp / 1000.0 / INTERVAL) * INTERVAL
-            timestamp_datetime = datetime.fromtimestamp(timestamp_trunc_secs)
-            logging.debug(f'Inserting {timestamp_datetime} {r['environment']} {r['pod']} {r['container']} {r['name']} {sample.value}')
-            cursor.execute(query, (timestamp_datetime, r['environment'], r['pod'], r['container'], sample.value))
+            query = """
+                INSERT INTO micrometrics (time, environment, pod, container, cpu_usage, cpu_limit, memory_usage, memory_limit)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                cpu_usage = VALUES(cpu_usage),
+                cpu_limit = VALUES(cpu_limit),
+                memory_usage = VALUES(memory_usage),
+                memory_limit = VALUES(memory_limit)
+            """
+            logging.debug(f'Inserting batch at {timestamp_datetime} with {len(insert_values)} entries')
+            cursor.executemany(query, insert_values)
+            connection.commit()
 
-    def insert_owner(self, cursor, r, ts):
+    def insert_owner(self, r, ts):
         if r['environment'] is None or r['pod'] is None or r['owner'] is None:
             return
 
-        query = f"""
+        query = """
             INSERT IGNORE INTO microowner (environment, pod, owner)
             VALUES (%s, %s, %s)
         """
-        logging.debug(f'Inserting owner {r['environment']} {r['pod']} {r['owner']}')
-        cursor.execute(query, (r['environment'], r['pod'], r['owner']))
+        logging.debug(f'Inserting owner {r["environment"]} {r["pod"]} {r["owner"]}')
+        with self.pool.get_connection() as connection, connection.cursor() as cursor:
+            cursor.execute(query, (r['environment'], r['pod'], r['owner']))
+            connection.commit()
 
     def insert(self, write_request):
-        with self.pool.get_connection() as connection, connection.cursor() as cursor:
-            with self.lock:
-                logging.debug(f'Processing {len(write_request.timeseries)} timeseries')
-                for ts in write_request.timeseries:
-                    r = self.map(ts.labels)
-                    if skip(r):
-                        continue
+        logging.debug(f'Received {len(write_request.timeseries)} timeseries')
 
-                    sorted_samples = sorted(ts.samples, key=lambda sample: sample.timestamp)
+        if self.batch_buffer is None:
+            watermark = min(sample.timestamp for ts in write_request.timeseries for sample in ts.samples)
+            self.batch_buffer = BatchBuffer(INTERVAL, MAX_DELAY, watermark)
 
-                    # If guess we can also not assume that the different timeseries are timestamp-ordered
-                    # So maybe we should process the entire request first and parition it where needed.
-                    # That would also have the benefit that the lock is not required during the entire processing.
+        for ts in write_request.timeseries:
+            r = self.map(ts.labels)
+            if skip(r):
+                continue
 
-                    timestamp_trunc_secs = int(ts.samples[0].timestamp / 1000.0 / INTERVAL) * INTERVAL
-                    if timestamp_trunc_secs != getattr(self, 'current_timestamp', None):
-                        if hasattr(self, 'current_timestamp'):
-                            self.flush_current_bucket(cursor)
-                        self.current_timestamp = timestamp_trunc_secs
-
-                    key = (r['environment'], r['pod'], r['container'])
-                    if key not in self.current_bucket:
-                        self.current_bucket[key] = {}
-                    self.current_bucket[key][r['name']] = ts.samples[0].value
-
-            connection.commit()
+            if r['name'] == "kube_pod_labels":
+                self.insert_owner(r, ts)
+            else:
+                self.insert_metrics(r, ts)
