@@ -1,9 +1,9 @@
 import logging
 import os
 from datetime import datetime
-import threading
 # Connection pool has by default up to 100 connections in parallel and does retries.
 import pymysqlpool
+from batch_buffer import BatchBuffer
 
 # The size of the timestamp buckets
 INTERVAL = int(os.getenv('INTERVAL', 60))
@@ -38,58 +38,21 @@ def get_env_or_throw(name):
         raise ValueError(f'{name} not set')
     return value
 
-# BatchBuffer keeps data for max_delay intervals to capture late data.
-# `insert` buckets samples into the interval batches and returns the oldest batch if it is time to flush it, minimizing locking.
-class BatchBuffer:
-    def __init__(self, interval, max_delay, watermark):
-        self.interval = interval
-        self.max_delay = max_delay
-        self.watermark = watermark
-        self.batches = []
-        # Lock to synchronize access to the watermark and the batches, since we may get concurrent requests.
-        self.lock = threading.Lock()
+def map(labels):
+    result = { 'name': None, 'environment': None, 'pod': None, 'container': None, 'owner': None }
+    for label in labels:
+        if label.name in LABEL_TO_COLUMN:
+            result[LABEL_TO_COLUMN[label.name]] = label.value
 
-    def _truncate_timestamp(self, timestamp):
-        return int(timestamp / 1000.0 / self.interval) * self.interval
+    if result['dp_name'] in NAME_TO_COLUMN:
+        result['name'] = NAME_TO_COLUMN[result['dp_name']]
+    elif result['dp_name'] == 'kube_pod_container_resource_limits':
+        if result['resource'] == 'cpu':
+            result['name']  = 'cpu_limit'
+        elif result['resource'] == 'memory':
+            result['name'] = 'memory_limit'
 
-    def _get_slot_index(self, timestamp):
-        index = (timestamp - self.watermark) // self.interval
-        while len(self.batches) <= index:
-            self.batches.append({})
-        return index
-
-    def _insert_samples(self, r, ts):
-        for sample in ts.samples:
-            timestamp_trunc_secs = self._truncate_timestamp(sample.timestamp)
-            slot_index = self._get_slot_index(timestamp_trunc_secs)
-            key = (r['environment'], r['pod'], r['container'])
-            if key not in self.batches[slot_index]:
-                self.batches[slot_index][key] = {
-                    'cpu_usage': None,
-                    'cpu_limit': None,
-                    'memory_usage': None,
-                    'memory_limit': None
-                }
-
-            # CPU usage of the interval can only be calculated if there is a previous value and that value did not wrap.
-            if r['name'] == 'cpu_usage' and slot_index > 0 and self.batches[slot_index-1][key]['cpu_usage'] is not None and r['value'] >= self.batches[slot_index-1][key]['cpu_usage'] is None:
-                r['value'] -= self.batches[slot_index-1][key]['cpu_usage']
-
-            self.batches[slot_index][key][r['name']] = sample.value
-
-    def _flush_candidate(self):
-        if len(self.batches) >= self.max_delay:
-            oldest_batch = self.batches.pop(0)
-            oldest_watermark = self.watermark
-            self.watermark += self.interval
-            return oldest_batch, oldest_watermark
-
-        return None, None
-
-    def insert(self, r, ts):
-        with self.lock:
-            self._insert_samples(r, ts)
-            return self._flush_candidate()
+    return result
 
 # Digest the Prometheus write requests, post process them and write them to the database in batches.
 # This takes late data into account using BatchBuffer.
@@ -130,22 +93,6 @@ class Writer:
                 )
             """)
             connection.commit()
-
-    def map(self, labels):
-        result = { 'name': None, 'environment': None, 'pod': None, 'container': None, 'owner': None }
-        for label in labels:
-            if label.name in LABEL_TO_COLUMN:
-                result[LABEL_TO_COLUMN[label.name]] = label.value
-
-        if result['dp_name'] in NAME_TO_COLUMN:
-            result['name'] = NAME_TO_COLUMN[result['dp_name']]
-        elif result['dp_name'] == 'kube_pod_container_resource_limits':
-            if result['resource'] == 'cpu':
-                result['name']  = 'cpu_limit'
-            elif result['resource'] == 'memory':
-                result['name'] = 'memory_limit'
-
-        return result
 
     def insert_metrics(self, r, ts):
         flush_batch, timestamp = self.batch_buffer.insert(r, ts)
@@ -198,7 +145,7 @@ class Writer:
             self.batch_buffer = BatchBuffer(INTERVAL, MAX_DELAY, watermark)
 
         for ts in write_request.timeseries:
-            r = self.map(ts.labels)
+            r = map(ts.labels)
             if skip(r):
                 continue
 
