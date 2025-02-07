@@ -1,8 +1,8 @@
 import unittest
 from batch_buffer import BatchBuffer
 
-def create_ts(timestamp, value):
-    return type('TestSample', (object,), {'samples': [type('Sample', (object,), {'timestamp': timestamp, 'value': value})()]})()
+def create_samples(timestamp, value):
+    return [type('Sample', (object,), {'timestamp': timestamp, 'value': value})()]
 
 def create_r(metric):
     return {
@@ -49,8 +49,8 @@ class TestBatchBuffer(unittest.TestCase):
         timestamp = 120000
         value = 100
         r = create_r('cpu_limit')
-        ts = create_ts(timestamp, value)
-        self.buffer._insert_samples(r, ts)
+        samples = create_samples(timestamp, value)
+        self.buffer._insert_samples(r, samples)
 
         slot_index = self.buffer._get_slot_index(timestamp)
         key = create_key(r)
@@ -62,8 +62,8 @@ class TestBatchBuffer(unittest.TestCase):
         first_value = 100
         r = create_r('cpu_usage')
         key = create_key(r)
-        ts = create_ts(first_timestamp, first_value)
-        self.buffer._insert_samples(r, ts)
+        samples = create_samples(first_timestamp, first_value)
+        self.buffer._insert_samples(r, samples)
 
         # Check that value with no predecessor is None.
         slot_index = self.buffer._get_slot_index(first_timestamp)
@@ -74,8 +74,8 @@ class TestBatchBuffer(unittest.TestCase):
         # Check if difference is calculated correctly.
         second_timestamp = 60100
         second_value = 110
-        ts = create_ts(second_timestamp, second_value)
-        self.buffer._insert_samples(r, ts)
+        samples = create_samples(second_timestamp, second_value)
+        self.buffer._insert_samples(r, samples)
 
         slot_index = self.buffer._get_slot_index(second_timestamp)
         self.assertIn(key, self.buffer.batches[slot_index])
@@ -85,8 +85,8 @@ class TestBatchBuffer(unittest.TestCase):
         # Check if wrapping is handled
         third_timestamp = 121100
         third_value = 10
-        ts = create_ts(third_timestamp, third_value)
-        self.buffer._insert_samples(r, ts)
+        samples = create_samples(third_timestamp, third_value)
+        self.buffer._insert_samples(r, samples)
 
         slot_index = self.buffer._get_slot_index(third_timestamp)
         self.assertIsNone(self.buffer.batches[slot_index][key]['cpu_usage'])

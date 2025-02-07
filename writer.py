@@ -54,6 +54,18 @@ def map(labels):
 
     return result
 
+def batch_to_array(timestamp, batch):
+    batch_values = []
+    for key, metrics in batch.items():
+        environment, pod, container = key
+        batch_values.append((
+            timestamp, environment, pod, container,
+            metrics['cpu_usage'], metrics['cpu_limit'],
+            metrics['memory_usage'], metrics['memory_limit']
+        ))
+    return batch_values
+
+
 # Digest the Prometheus write requests, post process them and write them to the database in batches.
 # This takes late data into account using BatchBuffer.
 # It also writes batches to the database in one go as a batch write.
@@ -66,7 +78,6 @@ class Writer:
             database=get_env_or_throw('DB_NAME')
         )
         self.create_table_if_needed()
-        self.batch_buffer = BatchBuffer(INTERVAL, MAX_DELAY)
 
     def create_table_if_needed(self):
         with self.pool.get_connection() as connection, connection.cursor() as cursor:
@@ -94,23 +105,15 @@ class Writer:
             """)
             connection.commit()
 
-    def insert_metrics(self, r, ts):
-        flush_batch, timestamp = self.batch_buffer.insert(r, ts)
+    def insert_metrics(self, r, samples):
+        flush_batch, timestamp = self.batch_buffer.insert(r, samples)
         if flush_batch:
             self.write_batch_to_db(flush_batch, timestamp)
 
     def write_batch_to_db(self, batch, timestamp):
         with self.pool.get_connection() as connection, connection.cursor() as cursor:
             timestamp_datetime = datetime.fromtimestamp(timestamp)
-            insert_values = []
-            for key, metrics in batch.items():
-                environment, pod, container = key
-                insert_values.append((
-                    timestamp_datetime, environment, pod, container,
-                    metrics['cpu_usage'], metrics['cpu_limit'],
-                    metrics['memory_usage'], metrics['memory_limit']
-                ))
-
+            insert_values = batch_to_array(timestamp_datetime, batch)
             query = """
                 INSERT INTO micrometrics (time, environment, pod, container, cpu_usage, cpu_limit, memory_usage, memory_limit)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
@@ -124,7 +127,7 @@ class Writer:
             cursor.executemany(query, insert_values)
             connection.commit()
 
-    def insert_owner(self, r, ts):
+    def insert_owner(self, r):
         if r['environment'] is None or r['pod'] is None or r['owner'] is None:
             return
 
@@ -149,7 +152,7 @@ class Writer:
             if skip(r):
                 continue
 
-            if r['name'] == "kube_pod_labels":
-                self.insert_owner(r, ts)
+            if r['name'] == "owner":
+                self.insert_owner(r)
             else:
-                self.insert_metrics(r, ts)
+                self.insert_metrics(r, ts.samples)

@@ -20,8 +20,8 @@ class BatchBuffer:
             self.batches.append({})
         return index
 
-    def _insert_samples(self, r, ts):
-        for sample in ts.samples:
+    def _insert_samples(self, r, samples):
+        for sample in samples:
             timestamp_trunc_secs = self._truncate_timestamp(sample.timestamp)
             slot_index = self._get_slot_index(timestamp_trunc_secs)
             key = (r['environment'], r['pod'], r['container'])
@@ -54,7 +54,7 @@ class BatchBuffer:
 
         return None, None
 
-    def insert(self, r, ts):
+    def insert(self, r, samples):
         with self.lock:
-            self._insert_samples(r, ts)
+            self._insert_samples(r, samples)
             return self._flush_candidate()
