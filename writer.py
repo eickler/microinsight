@@ -58,6 +58,9 @@ def batch_to_array(timestamp, batch):
     batch_values = []
     for key, metrics in batch.items():
         environment, pod, container = key
+        # Skip pod-level metrics, or containers without any limit set (because it doesn't make sense to calculate utilization without a limit).
+        if container is None or (metrics['cpu_limit'] is None and metrics['memory_limit'] is None):
+            continue
         batch_values.append((
             timestamp, environment, pod, container,
             metrics['cpu_usage'], metrics['cpu_limit'],
@@ -142,11 +145,11 @@ class Writer:
             connection.commit()
 
     def insert(self, write_request):
-        logging.debug(f'Received {len(write_request.timeseries)} timeseries')
-
         if self.batch_buffer is None:
             watermark = min(sample.timestamp for ts in write_request.timeseries for sample in ts.samples)
             self.batch_buffer = BatchBuffer(INTERVAL, MAX_DELAY, watermark)
+
+        logging.debug(f'Received {len(write_request.timeseries)} timeseries, buffer has {len(self.batch_buffer.batches)} batches so far')
 
         for ts in write_request.timeseries:
             r = map(ts.labels)
