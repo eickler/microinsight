@@ -6,7 +6,7 @@ class BatchBuffer:
     def __init__(self, interval, max_delay, watermark):
         self.interval = interval * 1000 # timestamps are in milliseconds
         self.max_delay = max_delay
-        self.watermark = watermark
+        self.watermark = self._truncate_timestamp(watermark)
         self.batches = []
         # Lock to synchronize access to the watermark and the batches, since we may get concurrent requests.
         self.lock = threading.Lock()
@@ -16,12 +16,15 @@ class BatchBuffer:
 
     def _get_slot_index(self, timestamp):
         index = (timestamp - self.watermark) // self.interval
-        while len(self.batches) <= index:
+        while len(self.batches) < index + 1:
             self.batches.append({})
         return index
 
     def _insert_samples(self, r, samples):
         for sample in samples:
+            if sample.timestamp < self.watermark:
+                continue
+
             timestamp_trunc_secs = self._truncate_timestamp(sample.timestamp)
             slot_index = self._get_slot_index(timestamp_trunc_secs)
             key = (r['environment'], r['pod'], r['container'])
@@ -41,7 +44,7 @@ class BatchBuffer:
                 if previous_value is not None and sample.value >= previous_value:
                   sample.value = sample.value - previous_value
                 else:
-                  sample.value = None
+                  continue
 
             self.batches[slot_index][key][r['name']] = sample.value
 

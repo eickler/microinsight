@@ -77,6 +77,7 @@ class Writer:
             password=get_env_or_throw('DB_PASS'),
             database=get_env_or_throw('DB_NAME')
         )
+        self.batch_buffer = None
         self.create_table_if_needed()
 
     def create_table_if_needed(self):
@@ -112,7 +113,7 @@ class Writer:
 
     def write_batch_to_db(self, batch, timestamp):
         with self.pool.get_connection() as connection, connection.cursor() as cursor:
-            timestamp_datetime = datetime.fromtimestamp(timestamp)
+            timestamp_datetime = datetime.fromtimestamp(timestamp / 1000)  # Convert milliseconds to seconds
             insert_values = batch_to_array(timestamp_datetime, batch)
             query = """
                 INSERT INTO micrometrics (time, environment, pod, container, cpu_usage, cpu_limit, memory_usage, memory_limit)

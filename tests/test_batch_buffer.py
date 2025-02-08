@@ -92,6 +92,15 @@ class TestBatchBuffer(unittest.TestCase):
         self.assertIsNone(self.buffer.batches[slot_index][key]['cpu_usage'])
         self.assertEqual(self.buffer.batches[slot_index][key]['cpu_usage_total'], third_value)
 
+    def test_insert_samples_before_watermark(self):
+        timestamp = -1000  # 1 second before the watermark
+        value = 50
+        r = create_r('cpu_usage')
+        samples = create_samples(timestamp, value)
+
+        self.buffer._insert_samples(r, samples)
+
+        self.assertEqual(len(self.buffer.batches), 0)
 
 if __name__ == '__main__':
     unittest.main()
