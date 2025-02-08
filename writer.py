@@ -8,6 +8,8 @@ from batch_buffer import BatchBuffer
 # The size of the timestamp buckets
 INTERVAL = int(os.getenv('INTERVAL', 60))
 MAX_DELAY = int(os.getenv('MAX_DELAY', 5))
+# Maximum number of rows to insert in one go
+CHUNK_SIZE = 5000
 
 LABEL_TO_COLUMN = {
     'container_label_io_kubernetes_pod_name': 'pod',
@@ -127,8 +129,10 @@ class Writer:
                 memory_usage = VALUES(memory_usage),
                 memory_limit = VALUES(memory_limit)
             """
-            logging.debug(f'Inserting batch at {timestamp_datetime} with {len(insert_values)} entries')
-            cursor.executemany(query, insert_values)
+            for i in range(0, len(insert_values), CHUNK_SIZE):
+                chunk = insert_values[i:i + CHUNK_SIZE]
+                logging.debug(f'Inserting batch at {timestamp_datetime} with {len(chunk)} entries')
+                cursor.executemany(query, chunk)
             connection.commit()
 
     def insert_owner(self, r):
