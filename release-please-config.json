@@ -1,10 +1,15 @@
 {
-  "release-type": "helm",
-  "extra-files": [
-    {
-      "path": "charts/values.yaml",
-      "type": "yaml",
-      "jsonpath": "$.image.tag"
+  "packages": {
+    ".": {
+      "release-type": "helm",
+      "package-name": "",
+      "extra-files": [
+        {
+          "path": "charts/values.yaml",
+          "type": "yaml",
+          "jsonpath": "$.image.tag"
+        }
+      ]
     }
-  ]
+  }
 }
