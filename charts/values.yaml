@@ -10,3 +10,4 @@ db:
   name: mydb
 interval: 60
 loglevel: INFO
+threads: 16

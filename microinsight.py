@@ -25,6 +25,7 @@ def receive_data():
 
 if __name__ == '__main__':
     level = os.getenv('LOG_LEVEL', 'INFO')
+    threads = os.getenv('THREADS', 16)
     logging.basicConfig(level=getattr(logging, level, logging.INFO))
     from waitress import serve
-    serve(app, host="0.0.0.0", port=80)
+    serve(app, host="0.0.0.0", port=80,threads=threads)
