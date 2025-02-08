@@ -22,7 +22,7 @@ This is an example of the output:
 | 2024-07-08 10:58:00 | demo        | cadvisor-lwf24 | cadvisor  |  24.61136 |        48 | 1.49573632E8 |   2.097152E9 |
 | 2024-07-08 10:59:00 | demo        | cadvisor-lwf24 | cadvisor  |  24.86298 |        48 | 1.36855552E8 |   2.097152E9 |
 
-cAdvisor calculates CPU usage in seconds, so `cpu_usage` reflects the CPU seconds consumed in the configured writing interval. `cpu_limit` is the maximum CPU seconds a container can consume in the interval (i.e., the actually configured limit in Kubernetes x the interval). Example: Assume an interval of one minute. In the minute following 10:57:00, the container `cadvisor` used 23.80411 CPU seconds and could have used up to 48 CPU seconds.  So the CPU utilization was around 49.6%. The memory utilization was 100 * 1.47968E8 bytes / 2.097152E9 bytes, so a mere 7%.
+cAdvisor calculates CPU usage in seconds, so `cpu_usage` reflects the CPU seconds consumed in the configured writing interval. `cpu_limit` is the maximum CPU seconds a container can consume in the interval (i.e., the actually configured limit in Kubernetes x the interval). Example: Assume an interval of one minute. In the minute following 10:57:00, the container `cadvisor` used 23.80411 CPU seconds and could have used up to 48 CPU seconds -- per second.  So the CPU utilization was around 23.80411 / 48 * 100 / 60 ~ 0.826%. The memory utilization was 100 * 1.47968E8 bytes / 2.097152E9 bytes, so a mere 7%.
 
 ## Prerequisites
 
@@ -68,6 +68,16 @@ Prometheus samples values at more or less arbitrary points in time during the `s
 
 Since `cpu_uages_total` is reported by cAdvisor as a cumulative total, microinsight subtracts the current bucket's total from the last bucket's total. That saves you some handstands in your SQL during reporting.
 
+```
+SELECT
+  time, environment, pod,
+  100 * cpu_usage / cpu_limit / 60 as cpu_utilization_percent,
+  100 * memory_usage / memory_limit as memory_utilization_percent
+FROM micrometrics
+WHERE container = 'cadvisor'
+ORDER BY time
+```
+
 Please note that if you aggregate the utilization across containers, you need to first add up the values across all containers and only then calculate utilization in a second step.
 
 If you first calculate the utilization per container and then average across all containers, every container will get the same weight, which is what you often do not want. For example, if a container with 1MB limit has 10% utilization and container with 1000MB limit has 90% utilization, the average utilization across containers is 50%. However, the memory usage in the cluster is not (1MB + 1000 MB) * 50%, but 1MB * 10% + 1000MB * 90% = 900.1 MB.
@@ -75,19 +85,19 @@ If you first calculate the utilization per container and then average across all
 ```
 SELECT
   time, environment, pod,
-  100 * cpu_usage / cpu_limit as cpu_utilization_percent,
-  100 * memory_usage / memory_limit as memory_utilization_percent
-FROM micrometrics
-WHERE container = 'cadvisor'
-ORDER BY time
+  100 * sum(cpu_usage) / sum(cpu_limit*60) AS avg_cpu_utilization,
+  100 * sum(memory_usage) / sum(memory_limit) AS avg_memory_utilization
+FROM
+  micrometrics mm LEFT JOIN microowner mo ON mm.environment = mo.environment AND mm.pod = mo.pod
+WHERE
+  time >= NOW() - INTERVAL 30 DAY
+GROUP BY
+  owner
 ```
-
-// TBD SOME MORE EXAMPLES HERE as previously.
 
 ## TBDs
 
 * There's no authentication on the endpoint (currently done before the endpoint).
-* I currently do not take wrapping of the CPU counter into account. It would only break one sample in a very long time.
 
 ## License and copyright notice
 
