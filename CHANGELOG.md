@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/eickler/microinsight/compare/v0.5.0...v0.5.1) (2025-02-09)
+
+
+### Bug Fixes
+
+* Container image reference fixed ([adaf82f](https://github.com/eickler/microinsight/commit/adaf82f19b78f8ac01d905ed95da18293a292e7d))
+
 ## [0.5.0](https://github.com/eickler/microinsight/compare/v0.4.3...v0.5.0) (2025-02-08)
 
 
