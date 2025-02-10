@@ -11,7 +11,10 @@ The pipeline is as follows:
 * The data is provided by [cAdvisor](https://github.com/google/cadvisor) and [KSM](https://github.com/kubernetes/kube-state-metrics).
 * The data is scraped by Prometheus (or Grafana agent) in regular intervals.
 * Prometheus pushes the data through the [remote_write protocol](https://docs.google.com/document/d/1LPhVRSFkGNSuU1fBd81ulhsCPR4hkSZyyBj1SZ8fWOM/edit?tab=t.0) to microinsight.
-* microinsight postprocesses the data and writes the result every `INTERVAL` seconds into a MySQL table `micrometrics` (creating it if necessary). System containers are excluded. (Please crosscheck `POD_PREFIX_BLACKLIST` in `writer.py`.)
+* microinsight postprocesses the data and writes the result in `INTERVAL` seconds into a MySQL table `micrometrics`.
+  * The table is created if necessary.
+  * System containers and containers without any limits are excluded. (Please crosscheck `POD_PREFIX_BLACKLIST` in `writer.py`.)
+  * Pleae see [late data handling](#late-data-handling) below.
 * Query as usual through SQL.
 
 This is an example of the output:
@@ -44,8 +47,7 @@ helm install \
   --set db.host=mycluster \
   --set db.user=mysql \
   --set db.pass=mysql \
-  --set db.name=mydb \
-  --set interval=60 \
+  --set db.name=mydb
   microinsight eickler-charts/microinsight
 kubectl get service microinsight
 ```
@@ -62,9 +64,34 @@ remote_write:
         action: keep
 ```
 
+## Configuration parameters
+
+| Chart     | Env        | Default | Description                                           |
+| --------- | ---------- | ------- | ----------------------------------------------------- |
+| db.host   | DB_HOST    |         | MySQL/MariaDB database host                           |
+| db.user   | DB_USER    |         | Database username                                     |
+| db.pass   | DB_PASS    |         | Database user password                                |
+| db.name   | DB_NAME    |         | Database name                                         |
+| interval  | INTERVAL   | 60      | Interval in seconds for creating database entries     |
+| maxdelay  | MAX_DELAY  | 5       | Number of intervals to keep in memory for late data   |
+| loglevel  | LOG_LEVEL  | INFO    | Python log level                                      |
+| threads   | THREADS    | 16      | Number of threads accepting connections               |
+| chunksize | CHUNK_SIZE | 5000    | Number of rows to write to the database in one insert |
+
+Note: The latter depends on the `max_allowed_packet` size of the database. If you get an error related to packet size, reduce the chunk size.
+
+
 ## Fine print
 
-Prometheus samples values at more or less arbitrary points in time during the `scrape_interval`. This makes it more difficult to correlate actuals and limits. For that reason, microinsight puts the forwarded values into buckets of size ``INTERVAL`` (truncates to ``INTERVAL`` seconds). E.g., if the interval is 60 seconds, an actual with timestamp ``2024-07-08 10:59:15:123`` and a limit with timestamp  ``2024-07-08 10:59:16:456`` are placed into the same bucket. Should another actual with timestamp ``2024-07-08 10:59:19:999`` arrives, it will simply overwrite the previous actual in the bucket. When the next value after the 60 seconds arrives, the result from the bucket is written into the database and a new bucket begins.
+### Prometheus sampling
+
+Prometheus samples values at more or less arbitrary points in time during the configured `scrape_interval`. This makes it more difficult to correlate actuals and limits. For that reason, microinsight puts the forwarded values into buckets of size `INTERVAL`, truncating the timestamp to `INTERVAL` seconds. E.g., if the interval is 60 seconds, an actual with timestamp `2024-07-08 10:59:15.123` and a limit with timestamp  `2024-07-08 10:59:16.456` are placed into the same bucket with tiemstamp `2024-07-08 10:59:00.000`. Should another actual with timestamp `2024-07-08 10:59:19.999` arrive, it will simply overwrite the previous actual in the bucket. When the next value after the 60 second interval arrives, a new bucket begins.
+
+### Late data handling
+
+Data can arrive sometimes pretty late and outside of timestamp order. For that reason, microinsight keeps `MAX_DELAY` buckets in memory and only flushes the oldest bucket to the database when the `MAX_DELAY + 1` bucket begins. When data for already flushed buckets still arrives, the data is discarded and a warning is printed. If you regularly see the message, please adjust either `INTERVAL` or `MAX_DELAY`. If microinsight is terminated for some reason, the buckets in memory are lost. (Note that the in-memory state also means that microinsight currently needs to be a singleton and can only be vertically scaled.)
+
+### CPU usage handling
 
 Since `cpu_uages_total` is reported by cAdvisor as a cumulative total, microinsight subtracts the current bucket's total from the last bucket's total. That saves you some handstands in your SQL during reporting.
 
@@ -98,6 +125,7 @@ GROUP BY
 ## TBDs
 
 * There's no authentication on the endpoint (currently done before the endpoint).
+* The service cannot be horizontally scaled.
 
 ## License and copyright notice
 

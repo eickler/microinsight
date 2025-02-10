@@ -1,3 +1,4 @@
+import logging
 import threading
 
 # BatchBuffer keeps data for max_delay intervals to capture late data.
@@ -23,6 +24,7 @@ class BatchBuffer:
     def _insert_samples(self, r, samples):
         for sample in samples:
             if sample.timestamp < self.watermark:
+                logging.warning(f"Discarding sample with timestamp {sample.timestamp} older than watermark {self.watermark}")
                 continue
 
             timestamp_trunc_secs = self._truncate_timestamp(sample.timestamp)

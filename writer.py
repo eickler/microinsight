@@ -7,9 +7,10 @@ from batch_buffer import BatchBuffer
 
 # The size of the timestamp buckets
 INTERVAL = int(os.getenv('INTERVAL', 60))
+# The number of timestamp buckets to keep in memory
 MAX_DELAY = int(os.getenv('MAX_DELAY', 5))
 # Maximum number of rows to insert in one go
-CHUNK_SIZE = 5000
+CHUNK_SIZE = int(os.getenv('CHUNK_SIZE', 5000))
 
 LABEL_TO_COLUMN = {
     'container_label_io_kubernetes_pod_name': 'pod',

@@ -9,5 +9,7 @@ db:
   pass: mysql
   name: mydb
 interval: 60
+maxdelay: 5
 loglevel: INFO
 threads: 16
+chunksize: 5000

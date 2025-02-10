@@ -40,7 +40,11 @@ spec:
                   key: DB_NAME
             - name: INTERVAL
               value: "{{ .Values.interval }}"
+            - name: MAX_DELAY
+              value: "{{ .Values.maxdelay }}"
             - name: LOG_LEVEL
               value: "{{ .Values.loglevel }}"
             - name: THREADS
               value: "{{ .Values.threads }}"
+            - name: CHUNK_SIZE
+              value: "{{ .Values.chunksize }}"
