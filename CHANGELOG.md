@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/eickler/microinsight/compare/v0.5.1...v0.6.0) (2025-02-10)
+
+
+### Features
+
+* Added configuration parameters, improved docs ([9a066a3](https://github.com/eickler/microinsight/commit/9a066a35a39ba4f1466f2cfe17a6e53365858f23))
+
 ## [0.5.1](https://github.com/eickler/microinsight/compare/v0.5.0...v0.5.1) (2025-02-09)
 
 
