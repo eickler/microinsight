@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/eickler/microinsight/compare/v0.6.0...v0.6.1) (2025-02-12)
+
+
+### Bug Fixes
+
+* Filter NaN values in Prometheus time series ([7dd26ca](https://github.com/eickler/microinsight/commit/7dd26caa87a3e0316fd393c23dd3d79c641630d3))
+
 ## [0.6.0](https://github.com/eickler/microinsight/compare/v0.5.1...v0.6.0) (2025-02-10)
 
 
