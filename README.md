@@ -111,7 +111,7 @@ If you first calculate the utilization per container and then average across all
 
 ```
 SELECT
-  time, environment, pod,
+  owner,
   100 * sum(cpu_usage) / sum(cpu_limit*60) AS avg_cpu_utilization,
   100 * sum(memory_usage) / sum(memory_limit) AS avg_memory_utilization
 FROM

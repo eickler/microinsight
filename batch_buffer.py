@@ -1,4 +1,4 @@
-import logging
+import math
 import threading
 
 # BatchBuffer keeps data for max_delay intervals to capture late data.
@@ -23,8 +23,7 @@ class BatchBuffer:
 
     def _insert_samples(self, r, samples):
         for sample in samples:
-            if sample.timestamp < self.watermark:
-                logging.warning(f"Discarding sample with timestamp {sample.timestamp} older than watermark {self.watermark}")
+            if sample.timestamp < self.watermark or sample.value is None:
                 continue
 
             timestamp_trunc_secs = self._truncate_timestamp(sample.timestamp)
@@ -48,6 +47,8 @@ class BatchBuffer:
                 else:
                   continue
 
+            if math.isnan(sample.value):
+                continue # For some reason, Prometheus can send NaN values.
             self.batches[slot_index][key][r['name']] = sample.value
 
     def _flush_candidate(self):
