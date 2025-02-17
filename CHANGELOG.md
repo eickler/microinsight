@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.7.0](https://github.com/eickler/microinsight/compare/v0.6.1...v0.7.0) (2025-02-17)
+
+
+### Features
+
+* Improved logging ([7c75a9a](https://github.com/eickler/microinsight/commit/7c75a9a86ed8f913723a70397b5402cce06a92ad))
+* More default capacity, logging improvements ([6d7a571](https://github.com/eickler/microinsight/commit/6d7a571f5553912f271d9cdeaf8dae34a018c976))
+* Write owners once every OWNER_FLUSH_INTERVAL secs ([e96c5df](https://github.com/eickler/microinsight/commit/e96c5df8611615b03dde780f52ac213d9118f5e9))
+
 ## [0.6.1](https://github.com/eickler/microinsight/compare/v0.6.0...v0.6.1) (2025-02-12)
 
 

@@ -1,7 +1,7 @@
 replicaCount: 1
 image:
   repository: ghcr.io/eickler/microinsight
-  tag: 0.6.1
+  tag: 0.7.0
   pullSecrets: regcred
 db:
   host: mycluster
