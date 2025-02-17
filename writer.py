@@ -1,7 +1,6 @@
 import logging
 import os
 from datetime import datetime
-# Connection pool has by default up to 100 connections in parallel and does retries.
 import pymysql
 import pymysqlpool
 from batch_buffer import BatchBuffer
@@ -14,6 +13,7 @@ MAX_DELAY = int(os.getenv('MAX_DELAY', 5))
 CHUNK_SIZE = int(os.getenv('CHUNK_SIZE', 5000))
 # Delay between retries in seconds (default in the pool driver is 0.1 seconds...)
 RETRY_DELAY = int(os.getenv('RETRY_DELAY', 1))
+OWNER_FLUSH_INTERVAL = int(os.getenv('OWNER_FLUSH_INTERVAL', 300))  # 5 minutes
 
 LABEL_TO_COLUMN = {
     'container_label_io_kubernetes_pod_name': 'pod',
@@ -88,6 +88,8 @@ class Writer:
             size=threads,maxsize=threads*5
         )
         self.batch_buffer = None
+        self.owner_buffer = []
+        self.last_owner_flush = datetime.now()
         self.create_table_if_needed()
 
     def create_table_if_needed(self):
@@ -116,6 +118,25 @@ class Writer:
             """)
             connection.commit()
 
+    def flush_owner_buffer(self):
+        if not self.owner_buffer:
+            return
+
+        query = """
+            INSERT IGNORE INTO microowner (environment, pod, owner)
+            VALUES (%s, %s, %s)
+        """
+        try:
+            with self.pool.get_connection(retry_interval=RETRY_DELAY) as connection, connection.cursor() as cursor:
+                cursor.executemany(query, self.owner_buffer)
+                connection.commit()
+            logging.debug(f'Flushed {len(self.owner_buffer)} owner entries to the database')
+            self.owner_buffer.clear()
+            self.last_owner_flush = datetime.now()
+        except pymysql.err.OperationalError as e:
+            logging.warning(f'Error inserting owners: {e}')
+            logging.debug("Exception details", exc_info=True)
+
     def insert_metrics(self, r, samples):
         flush_batch, timestamp = self.batch_buffer.insert(r, samples)
         if flush_batch:
@@ -124,7 +145,6 @@ class Writer:
             except pymysql.err.OperationalError as e:
                 logging.warning(f'Error inserting metrics: {e}')
                 logging.debug("Exception details", exc_info=True)
-
 
     def write_batch_to_db(self, batch, timestamp):
         with self.pool.get_connection(retry_interval=RETRY_DELAY) as connection, connection.cursor() as cursor:
@@ -149,18 +169,11 @@ class Writer:
         if r['environment'] is None or r['pod'] is None or r['owner'] is None:
             return
 
-        query = """
-            INSERT IGNORE INTO microowner (environment, pod, owner)
-            VALUES (%s, %s, %s)
-        """
-        logging.debug(f'Inserting owner {r["environment"]} {r["pod"]} {r["owner"]}')
-        try:
-            with self.pool.get_connection(retry_interval=RETRY_DELAY) as connection, connection.cursor() as cursor:
-                cursor.execute(query, (r['environment'], r['pod'], r['owner']))
-                connection.commit()
-        except pymysql.err.OperationalError as e:
-            logging.warning(f'Error inserting owner: {e}')
-            logging.debug("Exception details", exc_info=True)
+        self.owner_buffer.append((r['environment'], r['pod'], r['owner']))
+        logging.debug(f'Buffered owner {r["environment"]} {r["pod"]} {r["owner"]}')
+
+        if (datetime.now() - self.last_owner_flush).total_seconds() > OWNER_FLUSH_INTERVAL:
+            self.flush_owner_buffer()
 
     def insert(self, write_request):
         if self.batch_buffer is None:
