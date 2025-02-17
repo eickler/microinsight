@@ -119,7 +119,12 @@ class Writer:
     def insert_metrics(self, r, samples):
         flush_batch, timestamp = self.batch_buffer.insert(r, samples)
         if flush_batch:
-            self.write_batch_to_db(flush_batch, timestamp)
+            try:
+                self.write_batch_to_db(flush_batch, timestamp)
+            except pymysql.err.OperationalError as e:
+                logging.warning(f'Error inserting metrics: {e}')
+                logging.debug("Exception details", exc_info=True)
+
 
     def write_batch_to_db(self, batch, timestamp):
         with self.pool.get_connection(retry_interval=RETRY_DELAY) as connection, connection.cursor() as cursor:
