@@ -75,7 +75,7 @@ remote_write:
 | interval  | INTERVAL   | 60      | Interval in seconds for creating database entries     |
 | maxdelay  | MAX_DELAY  | 5       | Number of intervals to keep in memory for late data   |
 | loglevel  | LOG_LEVEL  | INFO    | Python log level                                      |
-| threads   | THREADS    | 16      | Number of threads accepting connections               |
+| threads   | THREADS    | 32      | Number of threads accepting connections               |
 | chunksize | CHUNK_SIZE | 5000    | Number of rows to write to the database in one insert |
 
 Note: The latter depends on the `max_allowed_packet` size of the database. If you get an error related to packet size, reduce the chunk size.

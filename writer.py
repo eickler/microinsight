@@ -2,6 +2,7 @@ import logging
 import os
 from datetime import datetime
 # Connection pool has by default up to 100 connections in parallel and does retries.
+import pymysql
 import pymysqlpool
 from batch_buffer import BatchBuffer
 
@@ -11,6 +12,8 @@ INTERVAL = int(os.getenv('INTERVAL', 60))
 MAX_DELAY = int(os.getenv('MAX_DELAY', 5))
 # Maximum number of rows to insert in one go
 CHUNK_SIZE = int(os.getenv('CHUNK_SIZE', 5000))
+# Delay between retries in seconds (default in the pool driver is 0.1 seconds...)
+RETRY_DELAY = int(os.getenv('RETRY_DELAY', 1))
 
 LABEL_TO_COLUMN = {
     'container_label_io_kubernetes_pod_name': 'pod',
@@ -76,12 +79,13 @@ def batch_to_array(timestamp, batch):
 # This takes late data into account using BatchBuffer.
 # It also writes batches to the database in one go as a batch write.
 class Writer:
-    def __init__(self):
+    def __init__(self, threads):
         self.pool = pymysqlpool.ConnectionPool(
             host=get_env_or_throw('DB_HOST'),
             user=get_env_or_throw('DB_USER'),
             password=get_env_or_throw('DB_PASS'),
-            database=get_env_or_throw('DB_NAME')
+            database=get_env_or_throw('DB_NAME'),
+            size=threads,maxsize=threads*5
         )
         self.batch_buffer = None
         self.create_table_if_needed()
@@ -118,7 +122,7 @@ class Writer:
             self.write_batch_to_db(flush_batch, timestamp)
 
     def write_batch_to_db(self, batch, timestamp):
-        with self.pool.get_connection() as connection, connection.cursor() as cursor:
+        with self.pool.get_connection(retry_interval=RETRY_DELAY) as connection, connection.cursor() as cursor:
             timestamp_datetime = datetime.fromtimestamp(timestamp / 1000)  # Convert milliseconds to seconds
             insert_values = batch_to_array(timestamp_datetime, batch)
             query = """
@@ -145,9 +149,13 @@ class Writer:
             VALUES (%s, %s, %s)
         """
         logging.debug(f'Inserting owner {r["environment"]} {r["pod"]} {r["owner"]}')
-        with self.pool.get_connection() as connection, connection.cursor() as cursor:
-            cursor.execute(query, (r['environment'], r['pod'], r['owner']))
-            connection.commit()
+        try:
+            with self.pool.get_connection(retry_interval=RETRY_DELAY) as connection, connection.cursor() as cursor:
+                cursor.execute(query, (r['environment'], r['pod'], r['owner']))
+                connection.commit()
+        except pymysql.err.OperationalError as e:
+            logging.warning(f'Error inserting owner: {e}')
+            logging.debug("Exception details", exc_info=True)
 
     def insert(self, write_request):
         if self.batch_buffer is None:

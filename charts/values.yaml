@@ -11,5 +11,5 @@ db:
 interval: 60
 maxdelay: 5
 loglevel: INFO
-threads: 16
+threads: 32
 chunksize: 5000
