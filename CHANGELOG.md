@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.2](https://github.com/eickler/microinsight/compare/v0.7.1...v0.7.2) (2025-02-24)
+
+
+### Bug Fixes
+
+* Fixed THREADS parameter, fixed empty timeseries ([b62cc61](https://github.com/eickler/microinsight/commit/b62cc612ec3426f58fa0e026152be7ed9ab4393b))
+
 ## [0.7.1](https://github.com/eickler/microinsight/compare/v0.7.0...v0.7.1) (2025-02-24)
 
 
