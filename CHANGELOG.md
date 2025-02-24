@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/eickler/microinsight/compare/v0.7.0...v0.7.1) (2025-02-24)
+
+
+### Bug Fixes
+
+* Convert THREADS to number ([ab28b37](https://github.com/eickler/microinsight/commit/ab28b37a189b3d63e0bc3f672e55a17e05647b7d))
+
 ## [0.7.0](https://github.com/eickler/microinsight/compare/v0.6.1...v0.7.0) (2025-02-17)
 
 
