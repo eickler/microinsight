@@ -24,7 +24,7 @@ def receive_data():
 
 if __name__ == '__main__':
     level = os.getenv('LOG_LEVEL', 'INFO')
-    threads = os.getenv('THREADS', 32)
+    threads = int(os.getenv('THREADS', 32))
     logging.basicConfig(level=getattr(logging, level, logging.INFO))
     writer = Writer(threads)
     from waitress import serve

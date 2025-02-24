@@ -176,7 +176,7 @@ class Writer:
             self.flush_owner_buffer()
 
     def insert(self, write_request):
-        if self.batch_buffer is None:
+        if self.batch_buffer is None and len(write_request.timeseries) > 0:
             watermark = min(sample.timestamp for ts in write_request.timeseries for sample in ts.samples)
             self.batch_buffer = BatchBuffer(INTERVAL, MAX_DELAY, watermark)
 
@@ -189,5 +189,5 @@ class Writer:
 
             if r['name'] == "owner":
                 self.insert_owner(r)
-            else:
+            elif len(ts.samples) > 0:
                 self.insert_metrics(r, ts.samples)
