@@ -28,4 +28,4 @@ if __name__ == '__main__':
     logging.basicConfig(level=getattr(logging, level, logging.INFO))
     writer = Writer(threads)
     from waitress import serve
-    serve(app, host="0.0.0.0", port=80,threads=threads)
+    serve(app, host="0.0.0.0", port=80,threads=int(threads))
