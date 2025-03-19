@@ -139,7 +139,6 @@ class Writer:
 
     def insert_metrics(self, r, samples):
         flush_batch, timestamp = self.batch_buffer.insert(r, samples)
-        logging.debug(f'At {timestamp} flush {flush_batch}')
         if flush_batch:
             try:
                 self.write_batch_to_db(flush_batch, timestamp)

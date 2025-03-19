@@ -19,7 +19,9 @@ def receive_data():
     write_request = WriteRequest()
     write_request.ParseFromString(decompressed_data)
 
+    logging.debug(f'Writing {write_request}')
     writer.insert(write_request)
+    logging.debug(f'Finished writing {write_request}')
     return jsonify(success=True)
 
 if __name__ == '__main__':
