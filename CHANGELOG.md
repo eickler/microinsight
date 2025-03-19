@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.7](https://github.com/eickler/microinsight/compare/v0.7.6...v0.7.7) (2025-03-19)
+
+
+### Bug Fixes
+
+* Fixed locking ([a9ea5e4](https://github.com/eickler/microinsight/commit/a9ea5e4b7fb665dec79ccaccf6630a865c9ac03d))
+
 ## [0.7.6](https://github.com/eickler/microinsight/compare/v0.7.5...v0.7.6) (2025-03-19)
 
 
