@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.5](https://github.com/eickler/microinsight/compare/v0.7.4...v0.7.5) (2025-03-19)
+
+
+### Bug Fixes
+
+* Reducing logging output size ([a358ffb](https://github.com/eickler/microinsight/commit/a358ffbfa08dc0bd15d36c726b0a49894ededaa7))
+
 ## [0.7.4](https://github.com/eickler/microinsight/compare/v0.7.3...v0.7.4) (2025-03-19)
 
 
