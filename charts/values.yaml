@@ -10,6 +10,6 @@ db:
   name: mydb
 interval: 60
 maxdelay: 5
-loglevel: INFO
-threads: 32
+loglevel: DEBUG
+threads: 64
 chunksize: 5000

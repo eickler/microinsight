@@ -79,7 +79,7 @@ def batch_to_array(timestamp, batch):
 # This takes late data into account using BatchBuffer.
 # It also writes batches to the database in one go as a batch write.
 class Writer:
-    def __init__(self, threads):
+    def __init__(self, threads=32):
         self.pool = pymysqlpool.ConnectionPool(
             host=get_env_or_throw('DB_HOST'),
             user=get_env_or_throw('DB_USER'),
@@ -139,6 +139,7 @@ class Writer:
 
     def insert_metrics(self, r, samples):
         flush_batch, timestamp = self.batch_buffer.insert(r, samples)
+        logging.debug(f'At {timestamp} flush {flush_batch}')
         if flush_batch:
             try:
                 self.write_batch_to_db(flush_batch, timestamp)
