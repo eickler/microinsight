@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.3](https://github.com/eickler/microinsight/compare/v0.7.2...v0.7.3) (2025-03-19)
+
+
+### Bug Fixes
+
+* Added temporary debug logging ([8aa2845](https://github.com/eickler/microinsight/commit/8aa28458d3559af77a5f7e45a7db4f4faf19095b))
+
 ## [0.7.2](https://github.com/eickler/microinsight/compare/v0.7.1...v0.7.2) (2025-02-24)
 
 
