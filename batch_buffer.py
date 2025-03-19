@@ -53,7 +53,7 @@ class BatchBuffer:
             self.batches[slot_index][key][r['name']] = sample.value
 
     def _flush_candidate(self):
-        logging.debug(f'{len(self.batches)} batches in buffer max sized {self.max_delay}, watermark at {self.watermark}')
+        logging.debug(f'{len(self.batches)} batches in buffer (max {self.max_delay}, interval {self.interval}, watermark {self.watermark})')
 
         if len(self.batches) > self.max_delay:
             oldest_batch = self.batches.pop(0)
