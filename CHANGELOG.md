@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.6](https://github.com/eickler/microinsight/compare/v0.7.5...v0.7.6) (2025-03-19)
+
+
+### Bug Fixes
+
+* Try requesting CPU ([769f764](https://github.com/eickler/microinsight/commit/769f7640e40b5d5782218b22c815476da069274a))
+
 ## [0.7.5](https://github.com/eickler/microinsight/compare/v0.7.4...v0.7.5) (2025-03-19)
 
 
