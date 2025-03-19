@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.9](https://github.com/eickler/microinsight/compare/v0.7.8...v0.7.9) (2025-03-19)
+
+
+### Bug Fixes
+
+* More logging ([a9541ab](https://github.com/eickler/microinsight/commit/a9541ab60ee048e305d655b24f9e0383891ca8bd))
+
 ## [0.7.8](https://github.com/eickler/microinsight/compare/v0.7.7...v0.7.8) (2025-03-19)
 
 
