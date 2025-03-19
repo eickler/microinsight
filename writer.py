@@ -144,14 +144,15 @@ class Writer:
         flush_batch, timestamp = self._insert_metrics(r, samples)
         if flush_batch:
             try:
-                logging.debug(f'Flushing {len(flush_batch)} entries at {timestamp} to database')
                 self.write_batch_to_db(flush_batch, timestamp)
             except pymysql.err.OperationalError as e:
                 logging.warning(f'Error inserting metrics: {e}')
                 logging.debug("Exception details", exc_info=True)
 
     def write_batch_to_db(self, batch, timestamp):
+        logging.debug(f'Flushing {len(batch)} entries at {timestamp} to database')
         with self.pool.get_connection(retry_interval=RETRY_DELAY) as connection, connection.cursor() as cursor:
+            logging.debug(f'Got pool connection')
             timestamp_datetime = datetime.fromtimestamp(timestamp / 1000)  # Convert milliseconds to seconds
             insert_values = batch_to_array(timestamp_datetime, batch)
             query = """
@@ -163,6 +164,7 @@ class Writer:
                 memory_usage = VALUES(memory_usage),
                 memory_limit = VALUES(memory_limit)
             """
+            logging.debug(f'Inserting {len(insert_values)} entries at {timestamp_datetime}')
             for i in range(0, len(insert_values), CHUNK_SIZE):
                 chunk = insert_values[i:i + CHUNK_SIZE]
                 logging.debug(f'Inserting batch at {timestamp_datetime} with {len(chunk)} entries')
