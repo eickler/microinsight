@@ -1,5 +1,6 @@
 import logging
 import os
+import threading
 from datetime import datetime
 import pymysql
 import pymysqlpool
@@ -88,7 +89,9 @@ class Writer:
             size=threads,maxsize=threads*5
         )
         self.batch_buffer = None
+        self.batch_buffer_lock = threading.Lock()
         self.owner_buffer = []
+        self.owner_buffer_lock = threading.Lock()
         self.last_owner_flush = datetime.now()
         self.create_table_if_needed()
 
@@ -118,27 +121,27 @@ class Writer:
             """)
             connection.commit()
 
-    def flush_owner_buffer(self):
-        if not self.owner_buffer:
-            return
-
+    def _flush_owner_buffer(self, buffer):
         query = """
             INSERT IGNORE INTO microowner (environment, pod, owner)
             VALUES (%s, %s, %s)
         """
         try:
             with self.pool.get_connection(retry_interval=RETRY_DELAY) as connection, connection.cursor() as cursor:
-                cursor.executemany(query, self.owner_buffer)
+                cursor.executemany(query, buffer)
                 connection.commit()
-            logging.debug(f'Flushed {len(self.owner_buffer)} owner entries to the database')
-            self.owner_buffer.clear()
+            logging.debug(f'Flushed {len(buffer)} owner entries to the database')
             self.last_owner_flush = datetime.now()
         except pymysql.err.OperationalError as e:
             logging.warning(f'Error inserting owners: {e}')
             logging.debug("Exception details", exc_info=True)
 
+    def _insert_metrics(self, r, samples):
+        with self.batch_buffer_lock:
+            return self.batch_buffer.insert(r, samples)
+
     def insert_metrics(self, r, samples):
-        flush_batch, timestamp = self.batch_buffer.insert(r, samples)
+        flush_batch, timestamp = self._insert_metrics(r, samples)
         if flush_batch:
             try:
                 self.write_batch_to_db(flush_batch, timestamp)
@@ -165,20 +168,30 @@ class Writer:
                 cursor.executemany(query, chunk)
             connection.commit()
 
+    def _insert_owner(self, r):
+        with self.owner_buffer_lock:
+            self.owner_buffer.append((r['environment'], r['pod'], r['owner']))
+            logging.debug(f'Buffered owner {r["environment"]} {r["pod"]} {r["owner"]}')
+
+            if (datetime.now() - self.last_owner_flush).total_seconds() > OWNER_FLUSH_INTERVAL:
+                buffer = self.owner_buffer
+                self.owner_buffer = []
+                return buffer
+            return None
+
     def insert_owner(self, r):
         if r['environment'] is None or r['pod'] is None or r['owner'] is None:
             return
 
-        self.owner_buffer.append((r['environment'], r['pod'], r['owner']))
-        logging.debug(f'Buffered owner {r["environment"]} {r["pod"]} {r["owner"]}')
-
-        if (datetime.now() - self.last_owner_flush).total_seconds() > OWNER_FLUSH_INTERVAL:
-            self.flush_owner_buffer()
+        buffer = self._insert_owner(r)
+        if buffer:
+            self._flush_owner_buffer(buffer)
 
     def insert(self, write_request):
-        if self.batch_buffer is None and len(write_request.timeseries) > 0:
-            watermark = min(sample.timestamp for ts in write_request.timeseries for sample in ts.samples)
-            self.batch_buffer = BatchBuffer(INTERVAL, MAX_DELAY, watermark)
+        with self.batch_buffer_lock:
+            if self.batch_buffer is None and len(write_request.timeseries) > 0:
+                watermark = min(sample.timestamp for ts in write_request.timeseries for sample in ts.samples)
+                self.batch_buffer = BatchBuffer(INTERVAL, MAX_DELAY, watermark)
 
         logging.debug(f'Received {len(write_request.timeseries)} timeseries, buffer has {len(self.batch_buffer.batches)} batches so far')
 

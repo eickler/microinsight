@@ -1,6 +1,5 @@
 import logging
 import math
-import threading
 
 # BatchBuffer keeps data for max_delay intervals to capture late data.
 # `insert` buckets samples into the interval batches and returns the oldest batch if it is time to flush it, minimizing locking.
@@ -10,8 +9,6 @@ class BatchBuffer:
         self.max_delay = max_delay
         self.watermark = self._truncate_timestamp(watermark)
         self.batches = []
-        # Lock to synchronize access to the watermark and the batches, since we may get concurrent requests.
-        self.lock = threading.Lock()
 
     def _truncate_timestamp(self, timestamp):
         return int(timestamp / self.interval) * self.interval
@@ -64,6 +61,5 @@ class BatchBuffer:
         return None, None
 
     def insert(self, r, samples):
-        with self.lock:
-            self._insert_samples(r, samples)
-            return self._flush_candidate()
+        self._insert_samples(r, samples)
+        return self._flush_candidate()
