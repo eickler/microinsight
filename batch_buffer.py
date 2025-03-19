@@ -50,12 +50,11 @@ class BatchBuffer:
             self.batches[slot_index][key][r['name']] = sample.value
 
     def _flush_candidate(self):
-        logging.debug(f'{len(self.batches)} batches in buffer (max {self.max_delay}, interval {self.interval}, watermark {self.watermark})')
-
         if len(self.batches) > self.max_delay:
             oldest_batch = self.batches.pop(0)
             oldest_watermark = self.watermark
             self.watermark += self.interval
+            logging.debug(f'Requesting flush of {len(oldest_batch)} entries at {oldest_watermark}, new watermark is {self.watermark}')
             return oldest_batch, oldest_watermark
 
         return None, None

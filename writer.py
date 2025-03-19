@@ -144,6 +144,7 @@ class Writer:
         flush_batch, timestamp = self._insert_metrics(r, samples)
         if flush_batch:
             try:
+                logging.debug(f'Flushing {len(flush_batch)} entries at {timestamp} to database')
                 self.write_batch_to_db(flush_batch, timestamp)
             except pymysql.err.OperationalError as e:
                 logging.warning(f'Error inserting metrics: {e}')
