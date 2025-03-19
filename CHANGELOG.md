@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.8](https://github.com/eickler/microinsight/compare/v0.7.7...v0.7.8) (2025-03-19)
+
+
+### Bug Fixes
+
+* Fixed connection setup ([ac7314a](https://github.com/eickler/microinsight/commit/ac7314a30d2e3bd1a5178dd28a4f9c544bb8d535))
+
 ## [0.7.7](https://github.com/eickler/microinsight/compare/v0.7.6...v0.7.7) (2025-03-19)
 
 
