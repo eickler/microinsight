@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.14](https://github.com/eickler/microinsight/compare/v0.7.13...v0.7.14) (2025-03-20)
+
+
+### Bug Fixes
+
+* Detect stuck threads ([0a0c07e](https://github.com/eickler/microinsight/commit/0a0c07ecb3364f82b7631bafd4b981087fe9f642))
+
 ## [0.7.13](https://github.com/eickler/microinsight/compare/v0.7.12...v0.7.13) (2025-03-20)
 
 
