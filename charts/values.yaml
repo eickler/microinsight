@@ -11,5 +11,5 @@ db:
 interval: 60
 maxdelay: 5
 loglevel: DEBUG
-threads: 64
+threads: 32
 chunksize: 5000

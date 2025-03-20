@@ -14,7 +14,12 @@ MAX_DELAY = int(os.getenv('MAX_DELAY', 5))
 CHUNK_SIZE = int(os.getenv('CHUNK_SIZE', 5000))
 # Delay between retries in seconds (default in the pool driver is 0.1 seconds...)
 RETRY_DELAY = int(os.getenv('RETRY_DELAY', 1))
+# Time when the microservice owners are flushed to the database
 OWNER_FLUSH_INTERVAL = int(os.getenv('OWNER_FLUSH_INTERVAL', 300))  # 5 minutes
+# Maximum database connection pool size
+POOL_SIZE = int(os.getenv('POOL_SIZE', int(os.getenv('THREADS', 32))))
+# Too old data is discarded, default is one day
+TOO_OLD_DATA = int(os.getenv('TOO_OLD_DATA', 86400))
 
 LABEL_TO_COLUMN = {
     'container_label_io_kubernetes_pod_name': 'pod',
@@ -34,7 +39,7 @@ NAME_TO_COLUMN = {
     'kube_pod_labels': 'owner'
 }
 
-POD_PREFIX_BLACKLIST = ["daemonset-", "deployment-", "kube-", "node-", "ebs-", "efs-"];
+POD_PREFIX_BLACKLIST = ["daemonset-", "deployment-", "kube-", "node-", "ebs-", "efs-"]
 
 def skip(r):
     return r['container'] == "POD" or not r['pod'] or any(r['pod'].startswith(prefix) for prefix in POD_PREFIX_BLACKLIST)
@@ -85,7 +90,8 @@ class Writer:
             host=get_env_or_throw('DB_HOST'),
             user=get_env_or_throw('DB_USER'),
             password=get_env_or_throw('DB_PASS'),
-            database=get_env_or_throw('DB_NAME')
+            database=get_env_or_throw('DB_NAME'),
+            maxsize=POOL_SIZE
         )
         self.batch_buffer = None
         self.batch_buffer_lock = threading.Lock()
@@ -150,25 +156,29 @@ class Writer:
 
     def write_batch_to_db(self, batch, timestamp):
         logging.debug(f'Flushing {len(batch)} entries at {timestamp} to database')
-        with self.pool.get_connection(retry_interval=RETRY_DELAY) as connection, connection.cursor() as cursor:
-            logging.debug(f'Got pool connection')
-            timestamp_datetime = datetime.fromtimestamp(timestamp / 1000)  # Convert milliseconds to seconds
-            insert_values = batch_to_array(timestamp_datetime, batch)
-            query = """
-                INSERT INTO micrometrics (time, environment, pod, container, cpu_usage, cpu_limit, memory_usage, memory_limit)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                ON DUPLICATE KEY UPDATE
-                cpu_usage = VALUES(cpu_usage),
-                cpu_limit = VALUES(cpu_limit),
-                memory_usage = VALUES(memory_usage),
-                memory_limit = VALUES(memory_limit)
-            """
-            logging.debug(f'Inserting {len(insert_values)} entries at {timestamp_datetime}')
-            for i in range(0, len(insert_values), CHUNK_SIZE):
-                chunk = insert_values[i:i + CHUNK_SIZE]
-                logging.debug(f'Inserting batch at {timestamp_datetime} with {len(chunk)} entries')
-                cursor.executemany(query, chunk)
-            connection.commit()
+        try:
+            with self.pool.get_connection(retry_interval=RETRY_DELAY) as connection, connection.cursor() as cursor:
+                logging.debug(f'Got pool connection')
+                timestamp_datetime = datetime.fromtimestamp(timestamp / 1000)  # Convert milliseconds to seconds
+                insert_values = batch_to_array(timestamp_datetime, batch)
+                query = """
+                    INSERT INTO micrometrics (time, environment, pod, container, cpu_usage, cpu_limit, memory_usage, memory_limit)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                    cpu_usage = VALUES(cpu_usage),
+                    cpu_limit = VALUES(cpu_limit),
+                    memory_usage = VALUES(memory_usage),
+                    memory_limit = VALUES(memory_limit)
+                """
+                logging.debug(f'Inserting {len(insert_values)} entries at {timestamp_datetime}')
+                for i in range(0, len(insert_values), CHUNK_SIZE):
+                    chunk = insert_values[i:i + CHUNK_SIZE]
+                    logging.debug(f'Inserting batch at {timestamp_datetime} with {len(chunk)} entries')
+                    cursor.executemany(query, chunk)
+                connection.commit()
+        except pymysql.err.OperationalError as e:
+            logging.warning(f'Error inserting batch: {e}')
+            logging.debug("Exception details", exc_info=True)
 
     def _insert_owner(self, r):
         with self.owner_buffer_lock:
@@ -193,6 +203,9 @@ class Writer:
         with self.batch_buffer_lock:
             if self.batch_buffer is None and len(write_request.timeseries) > 0:
                 watermark = min(sample.timestamp for ts in write_request.timeseries for sample in ts.samples)
+                too_old = datetime.now().timestamp() - TOO_OLD_DATA
+                if watermark < too_old:
+                    watermark = too_old
                 self.batch_buffer = BatchBuffer(INTERVAL, MAX_DELAY, watermark)
 
         logging.debug(f'Received {len(write_request.timeseries)} timeseries, buffer has {len(self.batch_buffer.batches)} batches so far')
