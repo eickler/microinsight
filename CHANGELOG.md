@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.11](https://github.com/eickler/microinsight/compare/v0.7.10...v0.7.11) (2025-03-20)
+
+
+### Bug Fixes
+
+* Suspect: Running out of connections ([6f63155](https://github.com/eickler/microinsight/commit/6f63155ca32b033afa68b1c4295e20910b856df9))
+
 ## [0.7.10](https://github.com/eickler/microinsight/compare/v0.7.9...v0.7.10) (2025-03-19)
 
 
