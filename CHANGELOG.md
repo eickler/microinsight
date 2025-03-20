@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.13](https://github.com/eickler/microinsight/compare/v0.7.12...v0.7.13) (2025-03-20)
+
+
+### Bug Fixes
+
+* Suspect: pymysqlpool locks up on retries ([2f76e26](https://github.com/eickler/microinsight/commit/2f76e26d901ef83f2c51888bfcffcb8586ea0a82))
+
 ## [0.7.12](https://github.com/eickler/microinsight/compare/v0.7.11...v0.7.12) (2025-03-20)
 
 
