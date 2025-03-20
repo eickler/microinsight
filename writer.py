@@ -12,8 +12,6 @@ INTERVAL = int(os.getenv('INTERVAL', 60))
 MAX_DELAY = int(os.getenv('MAX_DELAY', 5))
 # Maximum number of rows to insert in one go
 CHUNK_SIZE = int(os.getenv('CHUNK_SIZE', 5000))
-# Delay between retries in seconds (default in the pool driver is 0.1 seconds...)
-RETRY_DELAY = int(os.getenv('RETRY_DELAY', 1))
 # Time when the microservice owners are flushed to the database
 OWNER_FLUSH_INTERVAL = int(os.getenv('OWNER_FLUSH_INTERVAL', 300))  # 5 minutes
 # Maximum database connection pool size
@@ -132,7 +130,7 @@ class Writer:
             VALUES (%s, %s, %s)
         """
         try:
-            with self.pool.get_connection(retry_interval=RETRY_DELAY) as connection, connection.cursor() as cursor:
+            with self.pool.get_connection() as connection, connection.cursor() as cursor:
                 cursor.executemany(query, buffer)
                 connection.commit()
             logging.debug(f'Flushed {len(buffer)} owner entries to the database')
@@ -155,10 +153,9 @@ class Writer:
                 logging.debug("Exception details", exc_info=True)
 
     def write_batch_to_db(self, batch, timestamp):
-        logging.debug(f'Flushing {len(batch)} entries at {timestamp} to database')
+        logging.debug(f'Checking {len(batch)} entries at {timestamp} for flushing to database: {batch}')
         try:
-            with self.pool.get_connection(retry_interval=RETRY_DELAY) as connection, connection.cursor() as cursor:
-                logging.debug(f'Got pool connection')
+            with self.pool.get_connection() as connection, connection.cursor() as cursor:
                 timestamp_datetime = datetime.fromtimestamp(timestamp / 1000)  # Convert milliseconds to seconds
                 insert_values = batch_to_array(timestamp_datetime, batch)
                 query = """
