@@ -80,13 +80,12 @@ def batch_to_array(timestamp, batch):
 # This takes late data into account using BatchBuffer.
 # It also writes batches to the database in one go as a batch write.
 class Writer:
-    def __init__(self, threads=32):
+    def __init__(self):
         self.pool = pymysqlpool.ConnectionPool(
             host=get_env_or_throw('DB_HOST'),
             user=get_env_or_throw('DB_USER'),
             password=get_env_or_throw('DB_PASS'),
-            database=get_env_or_throw('DB_NAME'),
-            size=threads,maxsize=threads*5
+            database=get_env_or_throw('DB_NAME')
         )
         self.batch_buffer = None
         self.batch_buffer_lock = threading.Lock()

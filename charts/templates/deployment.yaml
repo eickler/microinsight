@@ -19,7 +19,7 @@ spec:
           image: "{{ .Values.image.repository }}:{{ if eq .Values.image.tag "latest" }}{{ .Values.image.tag }}{{ else }}v{{ .Values.image.tag }}{{ end }}"
           resources:
             requests:
-              cpu: "1"
+              cpu: "2"
           env:
             - name: DB_HOST
               valueFrom:
