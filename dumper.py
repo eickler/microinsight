@@ -17,9 +17,12 @@ def log_thread_dumps_periodically(interval=60):
     """Logs thread dumps periodically."""
     logging.debug(f"=== Dumping threads ===")
     while True:
-        thread_dumps = get_thread_dump()
-        for thread_name, stack_trace in thread_dumps.items():
-            logging.debug(f"{thread_name}\n{stack_trace}")
+        try:
+            thread_dumps = get_thread_dump()
+            for thread_name, stack_trace in thread_dumps.items():
+                logging.debug(f"{thread_name}\n{stack_trace}")
+        except Exception as e:
+            logging.error(f"Exception in thread dump logging: {e}", exc_info=True)
         time.sleep(interval)
 
 # Example usage (start in a separate thread)
