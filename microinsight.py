@@ -1,4 +1,3 @@
-import hashlib
 import logging
 import os
 from flask import Flask, request, jsonify
@@ -26,6 +25,7 @@ if __name__ == '__main__':
     level = os.getenv('LOG_LEVEL', 'INFO')
     threads = int(os.getenv('THREADS', 32))
     logging.basicConfig(level=getattr(logging, level, logging.INFO))
+    import dumper
     writer = Writer()
     from waitress import serve
     serve(app, host="0.0.0.0", port=80,threads=threads,connection_limit=threads*5)
