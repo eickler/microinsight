@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.15](https://github.com/eickler/microinsight/compare/v0.7.14...v0.7.15) (2025-03-20)
+
+
+### Bug Fixes
+
+* Suspect: Thread terminates? ([b3c9237](https://github.com/eickler/microinsight/commit/b3c9237a201f34489806385da0053ff6a83a55da))
+
 ## [0.7.14](https://github.com/eickler/microinsight/compare/v0.7.13...v0.7.14) (2025-03-20)
 
 
