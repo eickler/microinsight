@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.12](https://github.com/eickler/microinsight/compare/v0.7.11...v0.7.12) (2025-03-20)
+
+
+### Bug Fixes
+
+* Prevent pool exhaustion, discard too old data ([c1d2a91](https://github.com/eickler/microinsight/commit/c1d2a91b5c20e6d6d7127da0da534349e5c1e720))
+
 ## [0.7.11](https://github.com/eickler/microinsight/compare/v0.7.10...v0.7.11) (2025-03-20)
 
 
