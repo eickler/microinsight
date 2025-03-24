@@ -204,7 +204,7 @@ class Writer:
                     watermark = too_old
                 self.batch_buffer = BatchBuffer(INTERVAL, MAX_DELAY, watermark)
 
-        int total = 0
+        total = 0
         for ts in write_request.timeseries:
             total += len(ts.samples)
             r = map(ts.labels)
