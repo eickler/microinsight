@@ -1,3 +1,4 @@
+from datetime import time
 import logging
 import math
 
@@ -59,5 +60,9 @@ class BatchBuffer:
         return None, None
 
     def insert(self, r, samples):
+        start_time = time.time()
         self._insert_samples(r, samples)
+        end_time = time.time()
+        elapsed_time = (end_time - start_time) * 1000
+        logging.debug(f"Time spent in _insert_samples: {elapsed_time:.6f} milliseconds")
         return self._flush_candidate()

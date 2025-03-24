@@ -180,7 +180,6 @@ class Writer:
     def _insert_owner(self, r):
         with self.owner_buffer_lock:
             self.owner_buffer.append((r['environment'], r['pod'], r['owner']))
-            logging.debug(f'Buffered owner {r["environment"]} {r["pod"]} {r["owner"]}')
 
             if (datetime.now() - self.last_owner_flush).total_seconds() > OWNER_FLUSH_INTERVAL:
                 buffer = self.owner_buffer
@@ -205,8 +204,6 @@ class Writer:
                     watermark = too_old
                 self.batch_buffer = BatchBuffer(INTERVAL, MAX_DELAY, watermark)
 
-        logging.debug(f'Received {len(write_request.timeseries)} timeseries, buffer has {len(self.batch_buffer.batches)} batches so far')
-
         for ts in write_request.timeseries:
             r = map(ts.labels)
             if skip(r):
@@ -215,4 +212,5 @@ class Writer:
             if r['name'] == "owner":
                 self.insert_owner(r)
             elif len(ts.samples) > 0:
+                logging.debug(f'Received {len(write_request.timeseries)} metrics timeseries, buffer has {len(self.batch_buffer.batches)} batches so far')
                 self.insert_metrics(r, ts.samples)
