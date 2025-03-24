@@ -124,6 +124,7 @@ GROUP BY
 
 ## TBDs
 
+* Revisit locking; threads are mainly waiting on the lock.
 * There's no authentication on the endpoint (currently done before the endpoint).
 * The service cannot be horizontally scaled.
 

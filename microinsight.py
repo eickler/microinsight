@@ -24,7 +24,7 @@ def receive_data():
 if __name__ == '__main__':
     level = os.getenv('LOG_LEVEL', 'INFO')
     threads = int(os.getenv('THREADS', 32))
-    logging.basicConfig(level=getattr(logging, level, logging.INFO))
+    logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s', datefmt='%Y-%m-%d %H:%M:%S', level=getattr(logging, level, logging.INFO))
     import dumper
     writer = Writer()
     from waitress import serve
