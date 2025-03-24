@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/eickler/microinsight/compare/v0.7.20...v0.8.0) (2025-03-24)
+
+
+### Features
+
+* Release version ([6ed128c](https://github.com/eickler/microinsight/commit/6ed128cc3be4d21c43b1853c4ee1fe307a6d1bc4))
+
 ## [0.7.20](https://github.com/eickler/microinsight/compare/v0.7.19...v0.7.20) (2025-03-24)
 
 
