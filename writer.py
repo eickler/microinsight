@@ -204,7 +204,9 @@ class Writer:
                     watermark = too_old
                 self.batch_buffer = BatchBuffer(INTERVAL, MAX_DELAY, watermark)
 
+        int total = 0
         for ts in write_request.timeseries:
+            total += len(ts.samples)
             r = map(ts.labels)
             if skip(r):
                 continue
@@ -214,3 +216,4 @@ class Writer:
             elif len(ts.samples) > 0 and r['container'] is not None:
                 logging.debug(f'Received {len(write_request.timeseries)} metrics timeseries, buffer has {len(self.batch_buffer.batches)} batches so far')
                 self.insert_metrics(r, ts.samples)
+        return total

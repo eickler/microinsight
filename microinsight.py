@@ -18,8 +18,15 @@ def receive_data():
 
     write_request = WriteRequest()
     write_request.ParseFromString(decompressed_data)
-    writer.insert(write_request)
-    return jsonify(success=True)
+    total_written = writer.insert(write_request)
+
+    response = app.response_class(
+        status=204,
+        headers={
+            'X-Prometheus-Remote-Write-Samples-Written': str(total_written)
+        }
+    )
+    return response
 
 if __name__ == '__main__':
     level = os.getenv('LOG_LEVEL', 'INFO')
