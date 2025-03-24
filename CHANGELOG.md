@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.18](https://github.com/eickler/microinsight/compare/v0.7.17...v0.7.18) (2025-03-24)
+
+
+### Bug Fixes
+
+* Discard non-microservice metrics earlier ([fcbb077](https://github.com/eickler/microinsight/commit/fcbb07739adefce020e90724ad40f3ff49d6d883))
+
 ## [0.7.17](https://github.com/eickler/microinsight/compare/v0.7.16...v0.7.17) (2025-03-24)
 
 
