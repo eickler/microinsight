@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.19](https://github.com/eickler/microinsight/compare/v0.7.18...v0.7.19) (2025-03-24)
+
+
+### Bug Fixes
+
+* Acknowledge the reception correctly. ([66c3100](https://github.com/eickler/microinsight/commit/66c31002e64375cbf1cb13dfd0b94e5bc7d047ed))
+
 ## [0.7.18](https://github.com/eickler/microinsight/compare/v0.7.17...v0.7.18) (2025-03-24)
 
 
