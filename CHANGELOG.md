@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.17](https://github.com/eickler/microinsight/compare/v0.7.16...v0.7.17) (2025-03-24)
+
+
+### Bug Fixes
+
+* Wrong package imported ([95293b0](https://github.com/eickler/microinsight/commit/95293b0ac3412041ec5ea8d6b3df2f97b46b3ea0))
+
 ## [0.7.16](https://github.com/eickler/microinsight/compare/v0.7.15...v0.7.16) (2025-03-24)
 
 
