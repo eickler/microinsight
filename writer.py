@@ -153,11 +153,12 @@ class Writer:
                 logging.debug("Exception details", exc_info=True)
 
     def write_batch_to_db(self, batch, timestamp):
-        logging.debug(f'Checking {len(batch)} entries at {timestamp} for flushing to database: {batch}')
         try:
             with self.pool.get_connection() as connection, connection.cursor() as cursor:
                 timestamp_datetime = datetime.fromtimestamp(timestamp / 1000)  # Convert milliseconds to seconds
                 insert_values = batch_to_array(timestamp_datetime, batch)
+                if len(insert_values) == 0:
+                    return
                 query = """
                     INSERT INTO micrometrics (time, environment, pod, container, cpu_usage, cpu_limit, memory_usage, memory_limit)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
@@ -167,10 +168,9 @@ class Writer:
                     memory_usage = VALUES(memory_usage),
                     memory_limit = VALUES(memory_limit)
                 """
-                logging.debug(f'Inserting {len(insert_values)} entries at {timestamp_datetime}')
+                logging.debug(f'{len(insert_values)} of {len(batch)} entries at {timestamp_datetime} have limits, inserting.')
                 for i in range(0, len(insert_values), CHUNK_SIZE):
                     chunk = insert_values[i:i + CHUNK_SIZE]
-                    logging.debug(f'Inserting batch at {timestamp_datetime} with {len(chunk)} entries')
                     cursor.executemany(query, chunk)
                 connection.commit()
         except pymysql.err.OperationalError as e:
@@ -211,6 +211,6 @@ class Writer:
 
             if r['name'] == "owner":
                 self.insert_owner(r)
-            elif len(ts.samples) > 0:
+            elif len(ts.samples) > 0 and r['container'] is not None:
                 logging.debug(f'Received {len(write_request.timeseries)} metrics timeseries, buffer has {len(self.batch_buffer.batches)} batches so far')
                 self.insert_metrics(r, ts.samples)
