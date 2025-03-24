@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.16](https://github.com/eickler/microinsight/compare/v0.7.15...v0.7.16) (2025-03-24)
+
+
+### Bug Fixes
+
+* Fixed wrong metric timeseries logging ([465d354](https://github.com/eickler/microinsight/commit/465d354b03eecd8572fd341053573cd00fd93218))
+* Try with more CPU requests and less threads ([fe40da9](https://github.com/eickler/microinsight/commit/fe40da9df524bd8534d0c1f6d06c56609f58d40a))
+
 ## [0.7.15](https://github.com/eickler/microinsight/compare/v0.7.14...v0.7.15) (2025-03-20)
 
 
