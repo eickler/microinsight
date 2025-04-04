@@ -102,11 +102,10 @@ impl Buffer {
             .as_secs();
         let threshold = self.truncate_timestamp(now) - self.interval * self.max_delay as u64;
 
-        self.buffer.retain(|key, _| {
+        self.buffer.retain(|key, value| {
             if key.timestamp < threshold {
-                if let Some((key, value)) = self.buffer.remove(key) {
-                    flushed.push((key, Arc::try_unwrap(value).unwrap().into_inner().unwrap()));
-                }
+                let metrics = value.lock().unwrap().clone();
+                flushed.push((key.clone(), metrics));
                 false
             } else {
                 true
