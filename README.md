@@ -80,6 +80,9 @@ remote_write:
 
 Note: The latter depends on the `max_allowed_packet` size of the database. If you get an error related to packet size, reduce the chunk size.
 
+## Monitoring
+
+There is a "/health" (incl. CPU and memory statistics) and a "/metrics" endpoint (web server statistics in Prometheus format).
 
 ## Fine print
 
