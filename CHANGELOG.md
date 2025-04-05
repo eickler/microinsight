@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.9.0](https://github.com/eickler/microinsight/compare/v0.8.0...v0.9.0) (2025-04-05)
+
+
+### Features
+
+* Ported to Rust ([45795a8](https://github.com/eickler/microinsight/commit/45795a851cc2966e86bf2417e70c89596373905f))
+* Porting to Rust ([f4b930a](https://github.com/eickler/microinsight/commit/f4b930a28f097f3b694dc636ddac6bb2c07cd42a))
+
+
+### Performance Improvements
+
+* Improved logging and ops endpoints ([b9735cd](https://github.com/eickler/microinsight/commit/b9735cdc44cd8abe607c36fe2544dbe025f381d6))
+
 ## [0.8.0](https://github.com/eickler/microinsight/compare/v0.7.20...v0.8.0) (2025-03-24)
 
 
