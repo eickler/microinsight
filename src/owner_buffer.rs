@@ -20,10 +20,10 @@ pub struct OwnerBuffer {
 }
 
 impl OwnerBuffer {
-    pub fn new(flush_interval_secs: u64) -> Self {
+    pub fn new(flush_interval_secs: u64, last_flush: SystemTime) -> Self {
         OwnerBuffer {
             buffer: DashMap::new(),
-            last_flush: Arc::new(Mutex::new(SystemTime::now())),
+            last_flush: Arc::new(Mutex::new(last_flush)),
             flush_interval: Duration::from_secs(flush_interval_secs),
         }
     }
@@ -53,7 +53,7 @@ impl OwnerBuffer {
                     key.pod.clone(),
                     value.owner.clone(),
                 ));
-                false // Remove the entry from the buffer
+                false
             });
         }
 

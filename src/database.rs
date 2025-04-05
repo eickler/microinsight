@@ -1,4 +1,5 @@
 use crate::metrics_buffer::{Key, Metrics};
+use log::debug;
 use mysql::prelude::*;
 use mysql::*;
 use std::sync::Mutex;
@@ -51,6 +52,8 @@ impl Database {
     }
 
     pub fn insert_metrics(&self, metrics: Vec<(Key, Metrics)>) {
+        debug!("Inserting {} metrics into the database", metrics.len());
+
         let mut conn = self
             .pool
             .lock()
@@ -61,14 +64,17 @@ impl Database {
             (time, environment, pod, container, cpu_usage, cpu_limit, memory_usage, memory_limit)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
-            cpu_usage = VALUES(cpu_usage),
-            cpu_limit = VALUES(cpu_limit),
-            memory_usage = VALUES(memory_usage),
-            memory_limit = VALUES(memory_limit)";
+            cpu_usage = IFNULL(VALUES(cpu_usage), cpu_usage),
+            cpu_limit = IFNULL(VALUES(cpu_limit), cpu_limit),
+            memory_usage = IFNULL(VALUES(memory_usage), memory_usage),
+            memory_limit = IFNULL(VALUES(memory_limit), memory_limit)";
 
         let insert_values: Vec<_> = metrics
             .into_iter()
             .filter_map(|(key, metrics)| {
+                if metrics.cpu_limit.is_none() && metrics.memory_limit.is_none() {
+                    return None;
+                }
                 chrono::DateTime::from_timestamp_millis(key.timestamp as i64).map(|timestamp| {
                     (
                         timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
@@ -85,6 +91,7 @@ impl Database {
             .collect();
 
         for chunk in insert_values.chunks(self.chunk_size) {
+            debug!("Inserting a chunk of {} metrics", chunk.len());
             if let Err(e) = conn.exec_batch(query, chunk) {
                 eprintln!("Error inserting metrics: {}", e);
             }
@@ -92,6 +99,8 @@ impl Database {
     }
 
     pub fn insert_owners(&self, owners: Vec<(String, String, String)>) {
+        debug!("Inserting {} owners into the database", owners.len());
+
         let mut conn = self
             .pool
             .lock()

@@ -1,39 +1,44 @@
+use std::time::SystemTime;
+
+use actix_web::middleware::Logger;
 use actix_web::{App, HttpResponse, HttpServer, Responder, web};
 use log::LevelFilter;
-use metrics_buffer::MetricsBuffer;
 use once_cell::sync::Lazy;
-use owner_buffer::OwnerBuffer;
 use prost::Message;
 use snap::raw::Decoder;
 
+use buffer_manager::BufferManager;
 use database::Database;
-use labels::map;
+use metrics_buffer::MetricsBuffer;
 use microinsight::prometheus::WriteRequest;
+use owner_buffer::OwnerBuffer;
 
+mod buffer_manager;
 mod database;
 mod labels;
 mod metrics_buffer;
 mod owner_buffer;
 
-static BUFFER: Lazy<MetricsBuffer> = Lazy::new(|| {
-    let interval = std::env::var("INTERVAL")
+static BUFFER_MANAGER: Lazy<BufferManager> = Lazy::new(|| {
+    let metrics_interval = std::env::var("INTERVAL")
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(60);
 
-    let max_delay = std::env::var("MAX_DELAY")
+    let metrics_max_delay = std::env::var("MAX_DELAY")
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(5);
-    MetricsBuffer::new(interval * 1000, max_delay)
-});
 
-static OWNER_BUFFER: Lazy<OwnerBuffer> = Lazy::new(|| {
     let owner_flush_interval = std::env::var("OWNER_FLUSH_INTERVAL")
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(300);
-    OwnerBuffer::new(owner_flush_interval)
+
+    let metrics_buffer = MetricsBuffer::new(metrics_interval * 1000, metrics_max_delay);
+    let owner_buffer = OwnerBuffer::new(owner_flush_interval, SystemTime::now());
+
+    BufferManager::new(metrics_buffer, owner_buffer)
 });
 
 static DATABASE: Lazy<Database> = Lazy::new(|| {
@@ -68,7 +73,8 @@ async fn receive_data(body: web::Bytes) -> impl Responder {
         Err(_) => return HttpResponse::BadRequest().body("Failed to parse WriteRequest"),
     };
 
-    let (total_samples, metrics_to_flush, owners_to_flush) = to_buffers(write_request);
+    let (process_samples, metrics_to_flush, owners_to_flush) =
+        BUFFER_MANAGER.process_write_request(write_request);
 
     if !metrics_to_flush.is_empty() {
         DATABASE.insert_metrics(metrics_to_flush);
@@ -81,64 +87,24 @@ async fn receive_data(body: web::Bytes) -> impl Responder {
     HttpResponse::NoContent()
         .insert_header((
             "X-Prometheus-Remote-Write-Samples-Written",
-            total_samples.to_string(),
+            process_samples.to_string(),
         ))
         .finish()
 }
 
-fn to_buffers(
-    write_request: WriteRequest,
-) -> (
-    usize,
-    Vec<(metrics_buffer::Key, metrics_buffer::Metrics)>,
-    Vec<(String, String, String)>,
-) {
-    let mut total_samples = 0;
-
-    for ts in write_request.timeseries {
-        total_samples += ts.samples.len();
-        if let Some(labels) = map(&ts.labels) {
-            if labels.name.as_deref() == Some("owner") {
-                if let (Some(environment), Some(pod), Some(owner)) = (
-                    labels.environment.as_deref(),
-                    labels.pod.as_deref(),
-                    labels.owner.as_deref(),
-                ) {
-                    OWNER_BUFFER.insert(environment, pod, owner);
-                }
-                continue;
-            }
-
-            for sample in ts.samples {
-                if sample.value.is_nan() {
-                    continue;
-                }
-
-                if let Some(name) = &labels.name {
-                    BUFFER.insert(
-                        name,
-                        labels.environment.as_deref().unwrap_or(""),
-                        labels.pod.as_deref().unwrap_or(""),
-                        labels.container.as_deref().unwrap_or(""),
-                        sample.timestamp as u64,
-                        sample.value,
-                    );
-                }
-            }
-        }
-    }
-
-    let flushed_data = BUFFER.flush();
-    let owners = OWNER_BUFFER.flush();
-    (total_samples, flushed_data, owners)
-}
-
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    env_logger::builder().filter_level(LevelFilter::Info).init();
+    let log_level = std::env::var("LOG_LEVEL")
+        .unwrap_or_else(|_| "info".to_string())
+        .to_lowercase();
+
+    env_logger::builder()
+        .filter_level(log_level.parse().unwrap_or(LevelFilter::Info))
+        .init();
 
     HttpServer::new(|| {
         App::new()
+            .wrap(Logger::default())
             .route("/health", web::get().to(health))
             .route("/receive", web::post().to(receive_data))
     })
