@@ -21,6 +21,8 @@ mod labels;
 mod metrics_buffer;
 mod owner_buffer;
 
+static MAX_PAYLOAD_SIZE: usize = 4 * 1024 * 1024;
+
 static BUFFER_MANAGER: Lazy<BufferManager> = Lazy::new(|| {
     let metrics_interval = std::env::var("INTERVAL")
         .ok()
@@ -130,6 +132,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(prometheus.clone())
             .route("/health", web::get().to(health))
             .route("/receive", web::post().to(receive_data))
+            .app_data(web::PayloadConfig::new(MAX_PAYLOAD_SIZE))
     })
     .bind("0.0.0.0:80")?
     .run()

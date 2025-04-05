@@ -84,6 +84,8 @@ Note: The latter depends on the `max_allowed_packet` size of the database. If yo
 
 There is a "/health" (incl. CPU and memory statistics) and a "/metrics" endpoint (web server statistics in Prometheus format).
 
+TBD: The health endpoint seems to return the node memory, not the container memory.
+
 ## Fine print
 
 ### Prometheus sampling
