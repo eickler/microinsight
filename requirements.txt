@@ -1,7 +1,0 @@
-flask
-waitress
-python-snappy
-protobuf
-PyMySQL
-pymysql-pool==0.4.6
-cryptography

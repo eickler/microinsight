@@ -74,7 +74,7 @@ remote_write:
 | db.name   | DB_NAME    |         | Database name                                         |
 | interval  | INTERVAL   | 60      | Interval in seconds for creating database entries     |
 | maxdelay  | MAX_DELAY  | 5       | Number of intervals to keep in memory for late data   |
-| loglevel  | LOG_LEVEL  | INFO    | Python log level                                      |
+| loglevel  | LOG_LEVEL  | INFO    | Rust log level (trace, debug, info, warn, error)      |
 | threads   | THREADS    | 32      | Number of threads accepting connections               |
 | chunksize | CHUNK_SIZE | 5000    | Number of rows to write to the database in one insert |
 
@@ -124,7 +124,6 @@ GROUP BY
 
 ## TBDs
 
-* Revisit locking; threads are mainly waiting on the lock.
 * There's no authentication on the endpoint (currently done before the endpoint).
 * The service cannot be horizontally scaled.
 

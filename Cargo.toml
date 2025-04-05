@@ -1,0 +1,18 @@
+[package]
+name = "microinsight"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+actix-web = { version = "4.1.0", default-features = false, features = ["macros"] }
+chrono = "0.4.40"
+dashmap = "6.1.0"
+env_logger = "0.11"
+log = "0.4"
+mysql = "26.0"
+once_cell = "1.21.3"
+prost = "0.13.5"
+snap = "1.1.1"
+
+[build-dependencies]
+prost-build = "0.13.5"
