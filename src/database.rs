@@ -1,4 +1,4 @@
-use crate::buffer::{Key, Metrics};
+use crate::metrics_buffer::{Key, Metrics};
 use mysql::prelude::*;
 use mysql::*;
 use std::sync::Mutex;

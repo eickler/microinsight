@@ -18,15 +18,15 @@ pub struct Metrics {
     pub memory_limit: Option<f64>,
 }
 
-pub struct Buffer {
+pub struct MetricsBuffer {
     interval: u64,
     max_delay: usize,
     buffer: DashMap<Key, Arc<std::sync::Mutex<Metrics>>>,
 }
 
-impl Buffer {
+impl MetricsBuffer {
     pub fn new(interval: u64, max_delay: usize) -> Self {
-        Buffer {
+        MetricsBuffer {
             interval,
             max_delay,
             buffer: DashMap::new(),
@@ -131,7 +131,7 @@ mod tests {
 
     #[test]
     fn test_insert_cpu_limit() {
-        let buffer = Buffer::new(60, 5);
+        let buffer = MetricsBuffer::new(60, 5);
         let timestamp = 120;
         let value = 100.0;
 
@@ -146,7 +146,7 @@ mod tests {
 
     #[test]
     fn test_insert_cpu_usage_no_previous() {
-        let buffer = Buffer::new(60, 5);
+        let buffer = MetricsBuffer::new(60, 5);
         let timestamp = 120;
         let value = 100.0;
 
@@ -162,7 +162,7 @@ mod tests {
 
     #[test]
     fn test_insert_cpu_usage_with_previous() {
-        let buffer = Buffer::new(60, 5);
+        let buffer = MetricsBuffer::new(60, 5);
         let first_timestamp = 120;
         let first_value = 100.0;
         let second_timestamp = 180;
@@ -201,7 +201,7 @@ mod tests {
 
     #[test]
     fn test_insert_cpu_usage_with_wrapping() {
-        let buffer = Buffer::new(60, 5);
+        let buffer = MetricsBuffer::new(60, 5);
         let first_timestamp = 120;
         let first_value = 100.0;
         let second_timestamp = 180;
@@ -240,7 +240,7 @@ mod tests {
 
     #[test]
     fn test_insert_memory_usage() {
-        let buffer = Buffer::new(60, 5);
+        let buffer = MetricsBuffer::new(60, 5);
         let timestamp = 120;
         let value = 200.0;
 
@@ -262,7 +262,7 @@ mod tests {
 
     #[test]
     fn test_flush_removes_old_entries() {
-        let buffer = Buffer::new(60, 5);
+        let buffer = MetricsBuffer::new(60, 5);
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -305,7 +305,7 @@ mod tests {
 
     #[test]
     fn test_flush_empty_buffer() {
-        let buffer = Buffer::new(60, 5);
+        let buffer = MetricsBuffer::new(60, 5);
         let flushed = buffer.flush();
         assert!(flushed.is_empty());
     }

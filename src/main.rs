@@ -1,6 +1,6 @@
 use actix_web::{App, HttpResponse, HttpServer, Responder, web};
-use buffer::Buffer;
 use log::LevelFilter;
+use metrics_buffer::MetricsBuffer;
 use once_cell::sync::Lazy;
 use owner_buffer::OwnerBuffer;
 use prost::Message;
@@ -10,12 +10,12 @@ use database::Database;
 use labels::map;
 use microinsight::prometheus::WriteRequest;
 
-mod buffer;
 mod database;
 mod labels;
+mod metrics_buffer;
 mod owner_buffer;
 
-static BUFFER: Lazy<Buffer> = Lazy::new(|| {
+static BUFFER: Lazy<MetricsBuffer> = Lazy::new(|| {
     let interval = std::env::var("INTERVAL")
         .ok()
         .and_then(|v| v.parse().ok())
@@ -25,7 +25,7 @@ static BUFFER: Lazy<Buffer> = Lazy::new(|| {
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(5);
-    Buffer::new(interval * 1000, max_delay)
+    MetricsBuffer::new(interval * 1000, max_delay)
 });
 
 static OWNER_BUFFER: Lazy<OwnerBuffer> = Lazy::new(|| {
@@ -68,16 +68,15 @@ async fn receive_data(body: web::Bytes) -> impl Responder {
         Err(_) => return HttpResponse::BadRequest().body("Failed to parse WriteRequest"),
     };
 
-    let (total_samples, flushed_data) = insert(write_request);
+    let (total_samples, metrics_to_flush, owners_to_flush) = to_buffers(write_request);
 
-    // Flush and insert owners
-    let owners = OWNER_BUFFER.flush();
-    if !owners.is_empty() {
-        DATABASE.insert_owners(owners);
+    if !metrics_to_flush.is_empty() {
+        DATABASE.insert_metrics(metrics_to_flush);
     }
 
-    // Insert metrics
-    DATABASE.insert_metrics(flushed_data);
+    if !owners_to_flush.is_empty() {
+        DATABASE.insert_owners(owners_to_flush);
+    }
 
     HttpResponse::NoContent()
         .insert_header((
@@ -87,7 +86,13 @@ async fn receive_data(body: web::Bytes) -> impl Responder {
         .finish()
 }
 
-fn insert(write_request: WriteRequest) -> (usize, Vec<(buffer::Key, buffer::Metrics)>) {
+fn to_buffers(
+    write_request: WriteRequest,
+) -> (
+    usize,
+    Vec<(metrics_buffer::Key, metrics_buffer::Metrics)>,
+    Vec<(String, String, String)>,
+) {
     let mut total_samples = 0;
 
     for ts in write_request.timeseries {
@@ -124,7 +129,8 @@ fn insert(write_request: WriteRequest) -> (usize, Vec<(buffer::Key, buffer::Metr
     }
 
     let flushed_data = BUFFER.flush();
-    (total_samples, flushed_data)
+    let owners = OWNER_BUFFER.flush();
+    (total_samples, flushed_data, owners)
 }
 
 #[actix_web::main]
