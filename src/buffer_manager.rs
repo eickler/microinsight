@@ -33,11 +33,24 @@ impl BufferManager {
         );
 
         for ts in write_request.timeseries {
-            debug!(
-                "Processing timeseries with labels: {:?}, number of samples: {}",
-                ts.labels,
-                ts.samples.len()
-            );
+            if log::log_enabled!(log::Level::Debug) {
+                debug!(
+                    "Starting to process {} samples (name={:?}, container={:?}, owner={:?}",
+                    ts.samples.len(),
+                    ts.labels
+                        .iter()
+                        .find(|label| label.name == "__name__")
+                        .map(|label| &label.value),
+                    ts.labels
+                        .iter()
+                        .find(|label| label.name == "container_label_io_kubernetes_container_name")
+                        .map(|label| &label.value),
+                    ts.labels
+                        .iter()
+                        .find(|label| label.name == "label_owner")
+                        .map(|label| &label.value),
+                );
+            }
 
             total_samples += ts.samples.len();
             if let Some(labels) = map(&ts.labels) {
@@ -67,9 +80,9 @@ impl BufferManager {
                 };
 
                 debug!(
-                    "Processing {} samples for timeseries with labels: {:?}",
+                    "Processing {} samples for processed labels: {:?}",
                     ts.samples.len(),
-                    ts.labels
+                    labels
                 );
 
                 for sample in ts.samples {

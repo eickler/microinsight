@@ -1,5 +1,5 @@
 use crate::metrics_buffer::{Key, Metrics};
-use log::debug;
+use log::{debug, info};
 use mysql::prelude::*;
 use mysql::*;
 use std::sync::Mutex;
@@ -52,7 +52,7 @@ impl Database {
     }
 
     pub fn insert_metrics(&self, metrics: Vec<(Key, Metrics)>) {
-        debug!("Inserting {} metrics into the database", metrics.len());
+        info!("Inserting {} metrics into the database", metrics.len());
 
         let mut conn = self
             .pool
@@ -99,7 +99,7 @@ impl Database {
     }
 
     pub fn insert_owners(&self, owners: Vec<(String, String, String)>) {
-        debug!("Inserting {} owners into the database", owners.len());
+        info!("Inserting {} owners into the database", owners.len());
 
         let mut conn = self
             .pool

@@ -2,10 +2,12 @@ use std::time::SystemTime;
 
 use actix_web::middleware::Logger;
 use actix_web::{App, HttpResponse, HttpServer, Responder, web};
+use actix_web_prometheus::PrometheusMetricsBuilder;
 use log::LevelFilter;
 use once_cell::sync::Lazy;
 use prost::Message;
 use snap::raw::Decoder;
+use sysinfo::System;
 
 use buffer_manager::BufferManager;
 use database::Database;
@@ -58,7 +60,22 @@ static DATABASE: Lazy<Database> = Lazy::new(|| {
 });
 
 async fn health() -> impl Responder {
-    HttpResponse::Ok().json("{ \"status\" : \"UP\" }")
+    let mut system = System::new_all();
+    system.refresh_all();
+
+    let memory_used = system.used_memory();
+    let memory_total = system.total_memory();
+    let cpu_usage = system.global_cpu_usage();
+
+    HttpResponse::Ok().body(format!(
+        r#"{{
+            "status": "UP",
+            "memory_used": {},
+            "memory_total": {},
+            "cpu_usage": "{:.2}%"
+        }}"#,
+        memory_used, memory_total, cpu_usage
+    ))
 }
 
 async fn receive_data(body: web::Bytes) -> impl Responder {
@@ -102,9 +119,15 @@ async fn main() -> std::io::Result<()> {
         .filter_level(log_level.parse().unwrap_or(LevelFilter::Info))
         .init();
 
-    HttpServer::new(|| {
+    let prometheus = PrometheusMetricsBuilder::new("api")
+        .endpoint("/metrics")
+        .build()
+        .unwrap();
+
+    HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
+            .wrap(prometheus.clone())
             .route("/health", web::get().to(health))
             .route("/receive", web::post().to(receive_data))
     })
