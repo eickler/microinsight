@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/eickler/microinsight/compare/v0.9.0...v0.9.1) (2025-04-05)
+
+
+### Bug Fixes
+
+* Added zlib to Docker image ([3975f0f](https://github.com/eickler/microinsight/commit/3975f0ff23818ace0b6a3e7a131e21cefdd85e02))
+
 ## [0.9.0](https://github.com/eickler/microinsight/compare/v0.8.0...v0.9.0) (2025-04-05)
 
 
