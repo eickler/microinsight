@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.2](https://github.com/eickler/microinsight/compare/v0.9.1...v0.9.2) (2025-04-05)
+
+
+### Performance Improvements
+
+* More modest CPU requests ([5020af3](https://github.com/eickler/microinsight/commit/5020af3483ae2a160625369ca513273a31757add))
+
 ## [0.9.1](https://github.com/eickler/microinsight/compare/v0.9.0...v0.9.1) (2025-04-05)
 
 
