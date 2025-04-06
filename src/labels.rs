@@ -1,4 +1,4 @@
-use microinsight::prometheus::Label;
+use crate::prometheus::Label;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 

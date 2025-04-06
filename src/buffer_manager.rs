@@ -1,8 +1,8 @@
 use crate::labels::map;
 use crate::metrics_buffer::{Key as MetricsKey, Metrics, MetricsBuffer};
 use crate::owner_buffer::OwnerBuffer;
+use crate::prometheus::WriteRequest;
 use log::debug;
-use microinsight::prometheus::WriteRequest;
 
 pub struct BufferManager {
     metrics_buffer: MetricsBuffer,
@@ -113,7 +113,7 @@ mod tests {
     use super::*;
     use crate::metrics_buffer::MetricsBuffer;
     use crate::owner_buffer::OwnerBuffer;
-    use microinsight::prometheus::{Label, Sample, TimeSeries, WriteRequest};
+    use crate::prometheus::{Label, Sample, TimeSeries, WriteRequest};
     use std::time::SystemTime;
 
     #[test]
