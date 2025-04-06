@@ -87,7 +87,7 @@ async fn receive_data(server: web::Data<Server>, body: web::Bytes) -> impl Respo
         Err(_) => return HttpResponse::BadRequest().body("Failed to parse WriteRequest"),
     };
 
-    let (process_samples, metrics_to_flush, owners_to_flush) =
+    let (processed_samples, metrics_to_flush, owners_to_flush) =
         server.buffer_manager.process_write_request(write_request);
 
     if !metrics_to_flush.is_empty() {
@@ -101,7 +101,7 @@ async fn receive_data(server: web::Data<Server>, body: web::Bytes) -> impl Respo
     HttpResponse::NoContent()
         .insert_header((
             "X-Prometheus-Remote-Write-Samples-Written",
-            process_samples.to_string(),
+            processed_samples.to_string(),
         ))
         .finish()
 }
