@@ -13,7 +13,7 @@ use testcontainers_modules::{mariadb, testcontainers::runners::AsyncRunner};
 #[tokio::test]
 async fn test_receive_data_e2e() {
     let mysql_instance = mariadb::Mariadb::default()
-        .with_env_var("MARIADB_ALLOW_EMPTY_ROOT_PASSWORD", "0")
+        .with_env_var("MARIADB_ROOT_PASSWORD", "test")
         .start()
         .await
         .unwrap();
@@ -46,13 +46,17 @@ async fn test_receive_data_e2e() {
                     value: "container-1".to_string(),
                 },
                 Label {
+                    name: "resource".to_string(),
+                    value: "memory".to_string(),
+                },
+                Label {
                     name: "__name__".to_string(),
-                    value: "container_memory_working_set_bytes".to_string(),
+                    value: "kube_pod_container_resource_limits".to_string(),
                 },
             ],
             samples: vec![Sample {
                 value: 0.5,
-                timestamp: 1234567890,
+                timestamp: 60000, // Funny enough, Jan 1, 1970 0:00:00 UTC is not a valid timestamp in MySQL
             }],
             exemplars: vec![],
             histograms: vec![],
@@ -79,15 +83,20 @@ async fn test_receive_data_e2e() {
 
     assert_eq!(response.status(), 204);
 
-    let url = format!("mysql://root:test@{}/test", &db_url);
-    let opts = mysql::Opts::from_url(&url).expect("Invalid database URL");
+    let opts = mysql::Opts::from_url(&db_url).expect("Invalid database URL");
     let pool = mysql::Pool::new(opts).expect("Failed to create database pool");
     let mut conn = pool.get_conn().unwrap();
-    let result: Option<(String,)> = conn
-        .query_first("SELECT * FROM micrometrics LIMIT 1")
+    let result: Option<(String, String, String, Option<f32>, Option<f32>, Option<f32>, Option<f32>)> = conn
+        .query_first("SELECT environment, pod, container, cpu_usage, cpu_limit, memory_usage, memory_limit FROM micrometrics LIMIT 1")
         .unwrap();
 
     assert!(result.is_some());
+    let (environment, pod, container, _cpu_usage, _cpu_limit, _memory_usage, memory_limit) =
+        result.unwrap();
+    assert_eq!(environment, "prod");
+    assert_eq!(pod, "pod-1");
+    assert_eq!(container, "container-1");
+    assert_eq!(memory_limit, Some(0.5));
 
     server_handle.abort();
 }
