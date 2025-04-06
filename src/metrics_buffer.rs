@@ -1,5 +1,5 @@
 use dashmap::DashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 #[derive(Eq, PartialEq, Hash, Clone, Debug)]
 pub struct Key {
@@ -21,7 +21,7 @@ pub struct Metrics {
 pub struct MetricsBuffer {
     interval: u64,
     max_delay: usize,
-    buffer: DashMap<Key, Arc<std::sync::Mutex<Metrics>>>,
+    buffer: DashMap<Key, Arc<Mutex<Metrics>>>,
 }
 
 impl MetricsBuffer {
@@ -54,20 +54,10 @@ impl MetricsBuffer {
             container: container.to_string(),
         };
 
-        // Deadlock safety:
-        // We always first lock the current value and then the previous value.
-        // If the previous value is already locked, this is either locked due to
-        // a writing a different property, or due to the same property. If it's
-        // due to the same property, it will eventually unlock when the start of
-        // the buffer is reached.
-
-        let entry = self
-            .buffer
-            .entry(key.clone())
-            .or_insert_with(|| Arc::new(std::sync::Mutex::new(Metrics::default())));
-
-        let mut metrics = entry.lock().unwrap();
-        if name == "cpu_usage" {
+        // Prometheus remote write protocol specifies that metrics have to arrive in timestamp order
+        // for their database to work -- fingers crossed!
+        let mut previous_cpu_usage_total = Option::None;
+        if name == "cpu_usage_total" {
             let previous_key = Key {
                 timestamp: truncated_timestamp - self.interval,
                 environment: key.environment.clone(),
@@ -77,20 +67,29 @@ impl MetricsBuffer {
 
             if let Some(previous_entry) = self.buffer.get(&previous_key) {
                 let previous_metrics = previous_entry.lock().unwrap();
-                if let Some(prev_value) = previous_metrics.cpu_usage_total {
-                    if value >= prev_value {
-                        metrics.cpu_usage = Some(value - prev_value);
+                previous_cpu_usage_total = previous_metrics.cpu_usage_total;
+            }
+        }
+
+        let entry = self
+            .buffer
+            .entry(key.clone())
+            .or_insert_with(|| Arc::new(Mutex::new(Metrics::default())));
+
+        let mut metrics = entry.lock().unwrap();
+        match name {
+            "cpu_usage_total" => {
+                metrics.cpu_usage_total = Some(value);
+                if let Some(previous_value) = previous_cpu_usage_total {
+                    if value >= previous_value {
+                        metrics.cpu_usage = Some(value - previous_value);
                     }
                 }
             }
-            metrics.cpu_usage_total = Some(value);
-        } else {
-            match name {
-                "cpu_limit" => metrics.cpu_limit = Some(value),
-                "memory_usage" => metrics.memory_usage = Some(value),
-                "memory_limit" => metrics.memory_limit = Some(value),
-                _ => {}
-            }
+            "cpu_limit" => metrics.cpu_limit = Some(value),
+            "memory_usage" => metrics.memory_usage = Some(value),
+            "memory_limit" => metrics.memory_limit = Some(value),
+            _ => {}
         }
     }
 
@@ -150,7 +149,14 @@ mod tests {
         let timestamp = 120;
         let value = 100.0;
 
-        buffer.insert("cpu_usage", "env1", "pod1", "container1", timestamp, value);
+        buffer.insert(
+            "cpu_usage_total",
+            "env1",
+            "pod1",
+            "container1",
+            timestamp,
+            value,
+        );
 
         let key = create_key(buffer.truncate_timestamp(timestamp));
         let entry = buffer.buffer.get(&key).unwrap();
@@ -169,7 +175,7 @@ mod tests {
         let second_value = 150.0;
 
         buffer.insert(
-            "cpu_usage",
+            "cpu_usage_total",
             "env1",
             "pod1",
             "container1",
@@ -177,7 +183,7 @@ mod tests {
             first_value,
         );
         buffer.insert(
-            "cpu_usage",
+            "cpu_usage_total",
             "env1",
             "pod1",
             "container1",
@@ -200,15 +206,15 @@ mod tests {
     }
 
     #[test]
-    fn test_insert_cpu_usage_with_wrapping() {
+    fn test_insert_cpu_usage_with_previous_no_cpu_usage() {
         let buffer = MetricsBuffer::new(60, 5);
         let first_timestamp = 120;
         let first_value = 100.0;
         let second_timestamp = 180;
-        let second_value = 50.0; // Simulate wrapping
+        let second_value = 150.0;
 
         buffer.insert(
-            "cpu_usage",
+            "memory_usage",
             "env1",
             "pod1",
             "container1",
@@ -216,7 +222,47 @@ mod tests {
             first_value,
         );
         buffer.insert(
-            "cpu_usage",
+            "cpu_usage_total",
+            "env1",
+            "pod1",
+            "container1",
+            second_timestamp,
+            second_value,
+        );
+
+        let first_key = create_key(buffer.truncate_timestamp(first_timestamp));
+        let second_key = create_key(buffer.truncate_timestamp(second_timestamp));
+
+        let first_entry = buffer.buffer.get(&first_key).unwrap();
+        let first_metrics = first_entry.lock().unwrap();
+        assert_eq!(first_metrics.memory_usage, Some(first_value));
+        assert_eq!(first_metrics.cpu_usage, None);
+        assert_eq!(first_metrics.cpu_usage_total, None);
+
+        let second_entry = buffer.buffer.get(&second_key).unwrap();
+        let second_metrics = second_entry.lock().unwrap();
+        assert_eq!(second_metrics.cpu_usage, None);
+        assert_eq!(second_metrics.cpu_usage_total, Some(second_value));
+    }
+
+    #[test]
+    fn test_insert_cpu_usage_with_wrapping() {
+        let buffer = MetricsBuffer::new(60, 5);
+        let first_timestamp = 120;
+        let first_value = 100.0;
+        let second_timestamp = 180;
+        let second_value = 50.0;
+
+        buffer.insert(
+            "cpu_usage_total",
+            "env1",
+            "pod1",
+            "container1",
+            first_timestamp,
+            first_value,
+        );
+        buffer.insert(
+            "cpu_usage_total",
             "env1",
             "pod1",
             "container1",
@@ -234,7 +280,7 @@ mod tests {
 
         let second_entry = buffer.buffer.get(&second_key).unwrap();
         let second_metrics = second_entry.lock().unwrap();
-        assert_eq!(second_metrics.cpu_usage, None); // Wrapping detected
+        assert_eq!(second_metrics.cpu_usage, None);
         assert_eq!(second_metrics.cpu_usage_total, Some(second_value));
     }
 
@@ -271,7 +317,7 @@ mod tests {
         let recent_timestamp = now - 120; // Within max_delay
 
         buffer.insert(
-            "cpu_usage",
+            "cpu_usage_total",
             "env1",
             "pod1",
             "container1",
@@ -279,7 +325,7 @@ mod tests {
             100.0,
         );
         buffer.insert(
-            "cpu_usage",
+            "cpu_usage_total",
             "env1",
             "pod1",
             "container1",
