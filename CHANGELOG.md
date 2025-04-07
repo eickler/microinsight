@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.3](https://github.com/eickler/microinsight/compare/v0.9.2...v0.9.3) (2025-04-07)
+
+
+### Bug Fixes
+
+* Prevent deadlocks ([5ec25c4](https://github.com/eickler/microinsight/commit/5ec25c4a3cfd13a280036dd50db7084de47711e7))
+
 ## [0.9.2](https://github.com/eickler/microinsight/compare/v0.9.1...v0.9.2) (2025-04-05)
 
 
