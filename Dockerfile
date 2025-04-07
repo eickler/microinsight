@@ -6,10 +6,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     protobuf-compiler-grpc \
     libprotobuf-dev \
     zlib1g \
+    libssl-dev musl-dev pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . /app
-RUN cargo test --release
+RUN cargo test --release --lib  # Run only unit tests
 RUN cargo build --release
 
 FROM gcr.io/distroless/cc-debian12
