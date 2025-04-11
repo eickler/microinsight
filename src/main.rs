@@ -1,18 +1,20 @@
-use std::time::SystemTime;
+use std::{sync::Arc, time::SystemTime};
 
+use log::info;
 use microinsight::{
     Server, buffer_manager::BufferManager, database::Database, metrics_buffer::MetricsBuffer,
     owner_buffer::OwnerBuffer,
 };
 
 fn init_logging() {
-    let log_level = std::env::var("LOG_LEVEL")
+    simple_logger::SimpleLogger::new().env().init().unwrap();
+    /*    let log_level = std::env::var("LOG_LEVEL")
         .unwrap_or_else(|_| "info".to_string())
         .to_lowercase();
 
     env_logger::builder()
         .filter_level(log_level.parse().unwrap_or(log::LevelFilter::Info))
-        .init();
+        .init(); */
 }
 
 fn init_db() -> Database {
@@ -52,12 +54,15 @@ fn init_buffers() -> BufferManager {
 }
 
 #[tokio::main]
-async fn main() -> std::io::Result<()> {
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     init_logging();
     let database = init_db();
     let buffer_manager = init_buffers();
 
-    let server = Server::new(buffer_manager, database);
-    server.run().await?.await?;
+    info!("Starting server.");
+    let server = Arc::new(Server::new(buffer_manager, database));
+    let join_handle = server.run().await?;
+    join_handle.await?;
+    info!("Server finished.");
     Ok(())
 }

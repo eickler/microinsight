@@ -1,11 +1,13 @@
+use hyper::{Method, Request};
+use hyper_util::client::legacy::Client;
 use microinsight::metrics_buffer::MetricsBuffer;
 use microinsight::owner_buffer::OwnerBuffer;
 use microinsight::prometheus::{Label, Sample, TimeSeries, WriteRequest};
 use microinsight::{Server, buffer_manager::BufferManager, database::Database};
 use mysql::prelude::*;
 use prost::Message;
-use reqwest::Client;
 use snap::raw::Encoder;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use testcontainers::ImageExt;
 use testcontainers_modules::{mariadb, testcontainers::runners::AsyncRunner};
@@ -26,8 +28,8 @@ async fn test_receive_data_e2e() {
     let owner_buffer = OwnerBuffer::new(300, SystemTime::UNIX_EPOCH);
     let buffer_manager = BufferManager::new(metrics_buffer, owner_buffer);
 
-    let server = Server::new(buffer_manager, database);
-    let server_handle = tokio::spawn(server.run().await.expect("Failed to start server"));
+    let server = Arc::new(Server::new(buffer_manager, database));
+    let server_handle = server.run().await;
     tokio::time::sleep(Duration::from_secs(5)).await;
 
     let write_request = WriteRequest {
@@ -72,14 +74,16 @@ async fn test_receive_data_e2e() {
         .compress_vec(&buf)
         .expect("Failed to compress payload");
 
-    let client = Client::new();
-    let response = client
-        .post("http://127.0.0.1:80/receive")
-        .body(compressed_payload)
+    let client = Client::builder().build::<_, Body>(HttpConnector::new());
+
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri("http://127.0.0.1:80/receive")
         .header("Content-Encoding", "snappy")
-        .send()
-        .await
-        .expect("Failed to send request");
+        .body(Body::from(compressed_payload))
+        .expect("Failed to build request");
+
+    let response = client.request(req).await.expect("Failed to send request");
 
     assert_eq!(response.status(), 204);
 
@@ -98,5 +102,6 @@ async fn test_receive_data_e2e() {
     assert_eq!(container, "container-1");
     assert_eq!(memory_limit, Some(0.5));
 
-    server_handle.abort();
+    server.shutdown();
+    server_handle.unwrap().abort();
 }
