@@ -5,7 +5,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     protobuf-compiler \
     protobuf-compiler-grpc \
     libprotobuf-dev \
-    zlib1g \
     libssl-dev musl-dev pkg-config \
     && rm -rf /var/lib/apt/lists/*
 

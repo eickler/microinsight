@@ -8,6 +8,16 @@
           "path": "charts/values.yaml",
           "type": "yaml",
           "jsonpath": "$.image.tag"
+        },
+        {
+          "path": "charts/Chart.yaml",
+          "type": "yaml",
+          "jsonpath": "$.version"
+        },
+        {
+          "path": "Cargo.toml",
+          "type": "toml",
+          "jsonpath": "$.package.version"
         }
       ]
     }

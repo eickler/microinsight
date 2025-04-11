@@ -45,7 +45,7 @@ spec:
               value: "{{ .Values.interval }}"
             - name: MAX_DELAY
               value: "{{ .Values.maxdelay }}"
-            - name: LOG_LEVEL
+            - name: RUST_LOG
               value: "{{ .Values.loglevel }}"
             - name: THREADS
               value: "{{ .Values.threads }}"

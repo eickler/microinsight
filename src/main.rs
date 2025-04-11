@@ -6,13 +6,7 @@ use microinsight::{
 };
 
 fn init_logging() {
-    let log_level = std::env::var("LOG_LEVEL")
-        .unwrap_or_else(|_| "info".to_string())
-        .to_lowercase();
-
-    env_logger::builder()
-        .filter_level(log_level.parse().unwrap_or(log::LevelFilter::Info))
-        .init();
+    simple_logger::SimpleLogger::new().env().init().unwrap();
 }
 
 fn init_db() -> Database {
