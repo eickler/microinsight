@@ -8,7 +8,7 @@ db:
   user: mysql
   pass: mysql
   name: mydb
-interval: 600
+interval: 3000
 maxdelay: 5
 loglevel: INFO
 cpu: 1
