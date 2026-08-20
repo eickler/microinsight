@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.10.0](https://github.com/eickler/microinsight/compare/v0.9.5...v0.10.0) (2026-08-20)
+
+
+### Features
+
+* Retry the initial database connection with backoff ([#59](https://github.com/eickler/microinsight/issues/59)) ([d96e32b](https://github.com/eickler/microinsight/commit/d96e32b54df897219bf0ca33e027816f97af7300))
+
+
+### Bug Fixes
+
+* Drop the architecture assertion from the publish job ([#57](https://github.com/eickler/microinsight/issues/57)) ([a131e26](https://github.com/eickler/microinsight/commit/a131e26a47c74e41ea039ffd2e78c7b17c3da833))
+* Publish the release image before the version reaches main ([#55](https://github.com/eickler/microinsight/issues/55)) ([de9858a](https://github.com/eickler/microinsight/commit/de9858a627d0dfc043f951f15aa7ae384850fdb5))
+* Read the image digest with jq when signing ([#58](https://github.com/eickler/microinsight/issues/58)) ([d9461df](https://github.com/eickler/microinsight/commit/d9461df1dc054fedcd2bfd17a040dafa854ca761))
+
 ## [0.9.5](https://github.com/eickler/microinsight/compare/v0.9.4...v0.9.5) (2026-08-20)
 
 
