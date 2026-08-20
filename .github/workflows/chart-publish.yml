@@ -17,9 +17,18 @@ jobs:
 
       - name: Package Helm chart
         run: |
-          VERSION=$(echo ${{ github.ref }} | sed 's/refs\/tags\///')
+          # Strip the leading "v" of the tag so that the published chart version
+          # is plain SemVer and matches charts/Chart.yaml.
+          VERSION="${GITHUB_REF_NAME#v}"
+          CHART_VERSION=$(helm show chart charts | awk '/^version:/ {print $2}')
+          if [ "$VERSION" != "$CHART_VERSION" ]; then
+            echo "Tag $GITHUB_REF_NAME implies chart version $VERSION," \
+                 "but charts/Chart.yaml declares $CHART_VERSION." \
+                 "Chart.yaml is the version consumers read, so refusing to publish."
+            exit 1
+          fi
           echo "Packaging Helm chart version $VERSION"
-          helm package charts --destination . --version $VERSION
+          helm package charts --destination .
 
       - name: Checkout "charts" repository
         uses: actions/checkout@v4
