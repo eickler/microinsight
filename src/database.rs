@@ -1,30 +1,98 @@
 use crate::metrics_buffer::{Key, Metrics};
-use log::{debug, info};
+use log::{debug, info, warn};
 use mysql::prelude::*;
 use mysql::*;
 use std::sync::Mutex;
+use std::time::Duration;
+
+/// Number of times the initial connection is attempted before giving up.
+pub const DEFAULT_CONNECT_ATTEMPTS: u32 = 10;
+/// Wait before the second attempt. Doubles after every further failure.
+pub const DEFAULT_CONNECT_BASE_DELAY: Duration = Duration::from_secs(1);
+/// Upper bound for the wait between two attempts.
+const MAX_CONNECT_DELAY: Duration = Duration::from_secs(30);
+
+/// Runs `attempt` until it succeeds, waiting `base_delay` after the first
+/// failure and twice as long after each further one, capped at
+/// MAX_CONNECT_DELAY. `wait` is injected so that tests do not have to sleep.
+fn retry_with_backoff<T, E, F, W>(
+    mut attempt: F,
+    attempts: u32,
+    base_delay: Duration,
+    mut wait: W,
+) -> Result<T, E>
+where
+    F: FnMut() -> Result<T, E>,
+    E: std::fmt::Display,
+    W: FnMut(Duration),
+{
+    let attempts = attempts.max(1);
+    let mut delay = base_delay;
+    for attempt_number in 1..attempts {
+        match attempt() {
+            Ok(value) => return Ok(value),
+            Err(e) => {
+                warn!(
+                    "Attempt {} of {} to reach the database failed ({}), retrying in {:?}",
+                    attempt_number, attempts, e, delay
+                );
+                wait(delay);
+                delay = (delay * 2).min(MAX_CONNECT_DELAY);
+            }
+        }
+    }
+    // The final attempt propagates its error to the caller.
+    attempt()
+}
 
 pub struct Database {
     pool: Mutex<Pool>,
     chunk_size: usize,
+    connect_attempts: u32,
+    connect_base_delay: Duration,
 }
 
 impl Database {
     pub fn new(url: &str, chunk_size: usize) -> Self {
-        let pool = Pool::new(url).expect("Failed to create database pool");
+        Self::connect(
+            url,
+            chunk_size,
+            DEFAULT_CONNECT_ATTEMPTS,
+            DEFAULT_CONNECT_BASE_DELAY,
+        )
+    }
+
+    /// The pool opens its minimum connections eagerly, so this is where a
+    /// database that is not reachable yet shows up. Retrying matters because a
+    /// MySQL service that is restarting, or whose endpoints are briefly empty,
+    /// makes the connection time out rather than be refused, and giving up
+    /// immediately turns any such blip into a restart loop.
+    pub fn connect(url: &str, chunk_size: usize, attempts: u32, base_delay: Duration) -> Self {
+        let pool = retry_with_backoff(|| Pool::new(url), attempts, base_delay, std::thread::sleep)
+            .expect("Failed to create database pool");
         Database {
             pool: Mutex::new(pool),
             chunk_size,
+            connect_attempts: attempts,
+            connect_base_delay: base_delay,
         }
     }
 
+    /// Acquires a connection, retrying on the same schedule as the initial
+    /// connection. Used on the startup path, where giving up means the process
+    /// exits and Kubernetes restarts it into the same outage.
+    fn conn_with_retry(&self) -> PooledConn {
+        retry_with_backoff(
+            || self.pool.lock().unwrap().get_conn(),
+            self.connect_attempts,
+            self.connect_base_delay,
+            std::thread::sleep,
+        )
+        .expect("Failed to get connection")
+    }
+
     pub fn create_tables(&self) {
-        let mut conn = self
-            .pool
-            .lock()
-            .unwrap()
-            .get_conn()
-            .expect("Failed to get connection");
+        let mut conn = self.conn_with_retry();
         conn.query_drop(
             r"CREATE TABLE IF NOT EXISTS micrometrics (
                 time TIMESTAMP,
@@ -113,5 +181,123 @@ impl Database {
         if let Err(e) = conn.exec_batch(query, owners) {
             eprintln!("Error inserting owners: {}", e);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::{Cell, RefCell};
+
+    #[test]
+    fn test_retry_succeeds_on_first_attempt() {
+        let calls = Cell::new(0u32);
+        let waits = RefCell::new(Vec::new());
+
+        let result: Result<&str, String> = retry_with_backoff(
+            || {
+                calls.set(calls.get() + 1);
+                Ok("connected")
+            },
+            5,
+            Duration::from_millis(10),
+            |d| waits.borrow_mut().push(d),
+        );
+
+        assert_eq!(result.unwrap(), "connected");
+        assert_eq!(calls.get(), 1);
+        assert!(
+            waits.borrow().is_empty(),
+            "must not wait when the first attempt works"
+        );
+    }
+
+    #[test]
+    fn test_retry_recovers_after_failures() {
+        let calls = Cell::new(0u32);
+        let waits = RefCell::new(Vec::new());
+
+        let result: Result<&str, String> = retry_with_backoff(
+            || {
+                calls.set(calls.get() + 1);
+                if calls.get() < 3 {
+                    Err(format!("connection timeout {}", calls.get()))
+                } else {
+                    Ok("connected")
+                }
+            },
+            5,
+            Duration::from_millis(10),
+            |d| waits.borrow_mut().push(d),
+        );
+
+        assert_eq!(result.unwrap(), "connected");
+        assert_eq!(calls.get(), 3);
+        assert_eq!(
+            *waits.borrow(),
+            vec![Duration::from_millis(10), Duration::from_millis(20)],
+            "delay must double after each failure"
+        );
+    }
+
+    #[test]
+    fn test_retry_gives_up_after_all_attempts() {
+        let calls = Cell::new(0u32);
+        let waits = RefCell::new(Vec::new());
+
+        let result: Result<&str, String> = retry_with_backoff(
+            || {
+                calls.set(calls.get() + 1);
+                Err("connection timeout".to_string())
+            },
+            4,
+            Duration::from_millis(10),
+            |d| waits.borrow_mut().push(d),
+        );
+
+        assert!(result.is_err());
+        assert_eq!(calls.get(), 4, "every attempt must be used");
+        assert_eq!(waits.borrow().len(), 3, "no wait after the final attempt");
+    }
+
+    #[test]
+    fn test_retry_delay_is_capped() {
+        let waits = RefCell::new(Vec::new());
+
+        let result: Result<&str, String> = retry_with_backoff(
+            || Err("connection timeout".to_string()),
+            5,
+            Duration::from_secs(10),
+            |d| waits.borrow_mut().push(d),
+        );
+
+        assert!(result.is_err());
+        assert_eq!(
+            *waits.borrow(),
+            vec![
+                Duration::from_secs(10),
+                Duration::from_secs(20),
+                MAX_CONNECT_DELAY,
+                MAX_CONNECT_DELAY,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_retry_treats_zero_attempts_as_one() {
+        let calls = Cell::new(0u32);
+
+        let result: Result<&str, String> = retry_with_backoff(
+            || {
+                calls.set(calls.get() + 1);
+                Err("connection timeout".to_string())
+            },
+            0,
+            Duration::from_millis(10),
+            |_| {},
+        );
+
+        assert!(result.is_err());
+        assert_eq!(calls.get(), 1);
     }
 }

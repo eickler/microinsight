@@ -1,7 +1,10 @@
 use std::time::SystemTime;
 
 use microinsight::{
-    Server, buffer_manager::BufferManager, database::Database, metrics_buffer::MetricsBuffer,
+    Server,
+    buffer_manager::BufferManager,
+    database::{DEFAULT_CONNECT_ATTEMPTS, DEFAULT_CONNECT_BASE_DELAY, Database},
+    metrics_buffer::MetricsBuffer,
     owner_buffer::OwnerBuffer,
 };
 
@@ -25,8 +28,18 @@ fn init_db() -> Database {
         .and_then(|v| v.parse().ok())
         .unwrap_or(5000);
 
+    let connect_attempts = std::env::var("DB_CONNECT_ATTEMPTS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(DEFAULT_CONNECT_ATTEMPTS);
+
     let db_url = format!("mysql://{}:{}@{}/{}", db_user, db_pass, db_host, db_name);
-    let database = Database::new(&db_url, chunk_size);
+    let database = Database::connect(
+        &db_url,
+        chunk_size,
+        connect_attempts,
+        DEFAULT_CONNECT_BASE_DELAY,
+    );
     database.create_tables();
     database
 }

@@ -72,6 +72,7 @@ remote_write:
 | db.user   | DB_USER    |         | Database username                                     |
 | db.pass   | DB_PASS    |         | Database user password                                |
 | db.name   | DB_NAME    |         | Database name                                         |
+| db.attempts | DB_CONNECT_ATTEMPTS | 10 | Attempts to reach the database at startup. The wait starts at one second and doubles after each failure, capped at 30 seconds. |
 | interval  | INTERVAL   | 60      | Interval in seconds for creating database entries     |
 | maxdelay  | MAX_DELAY  | 5       | Number of intervals to keep in memory for late data   |
 | loglevel  | LOG_LEVEL  | INFO    | Rust log level (trace, debug, info, warn, error)      |
