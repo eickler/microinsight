@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.4](https://github.com/eickler/microinsight/compare/v0.9.3...v0.9.4) (2026-08-20)
+
+
+### Bug Fixes
+
+* Flush metrics buckets using millisecond timestamps ([61215ea](https://github.com/eickler/microinsight/commit/61215ea6f9530eaa4884c95acc55ef30e934209b))
+* Flush metrics buckets using millisecond timestamps ([97bc71f](https://github.com/eickler/microinsight/commit/97bc71faaa9947beb8849b4495138f8990e1dee5))
+
 ## [0.9.3](https://github.com/eickler/microinsight/compare/v0.9.2...v0.9.3) (2025-05-26)
 
 
