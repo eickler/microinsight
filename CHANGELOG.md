@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.5](https://github.com/eickler/microinsight/compare/v0.9.4...v0.9.5) (2026-08-20)
+
+
+### Bug Fixes
+
+* Bump the chart version in charts/Chart.yaml on release ([65667de](https://github.com/eickler/microinsight/commit/65667de44f8bcaf4a67a2cad80277b979263ff6b))
+* Bump the chart version in charts/Chart.yaml on release ([0ca7c25](https://github.com/eickler/microinsight/commit/0ca7c258c2cced940325de0c6559a19cca341465))
+
 ## [0.9.4](https://github.com/eickler/microinsight/compare/v0.9.3...v0.9.4) (2026-08-20)
 
 
