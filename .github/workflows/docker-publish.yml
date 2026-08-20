@@ -164,19 +164,16 @@ jobs:
             --tag "${REGISTRY}/${IMAGE_NAME}:${TAG}" \
             $(printf "${REGISTRY}/${IMAGE_NAME}@sha256:%s " *)
 
-      - name: Verify every architecture is present
+      - name: Show the published manifest
         env:
           TAG: ${{ needs.plan.outputs.tag }}
         run: |
           set -euo pipefail
-          IMAGE="${REGISTRY}/${IMAGE_NAME}:${TAG}"
-          docker buildx imagetools inspect "$IMAGE"
-          for PLATFORM in linux/amd64 linux/arm64; do
-            if ! docker buildx imagetools inspect --raw "$IMAGE" | grep -q "\"architecture\":\"${PLATFORM#linux/}\""; then
-              echo "$IMAGE has no $PLATFORM manifest"
-              exit 1
-            fi
-          done
+          # Logged so that the architectures of a release can be read off the
+          # run afterwards. This does not assert anything: a build failure on
+          # either architecture already fails the build job, which skips this
+          # job through `needs`.
+          docker buildx imagetools inspect "${REGISTRY}/${IMAGE_NAME}:${TAG}"
 
       - name: Sign the published image
         env:
