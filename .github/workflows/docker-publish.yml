@@ -1,0 +1,188 @@
+name: Build and publish container image
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      push: ${{ steps.plan.outputs.push }}
+      tag: ${{ steps.plan.outputs.tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Decide what to publish
+        id: plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          set -euo pipefail
+          # A release pull request already carries the version that main is about
+          # to publish, so the image has to exist before that pull request is
+          # merged. Flux tracks charts/ on main with the default ChartVersion
+          # reconcile strategy, which means it starts an upgrade the moment the
+          # bumped charts/Chart.yaml lands. Building on the release event instead
+          # would race that upgrade and leave the pod in ImagePullBackOff until
+          # the build finished.
+          if [ "$EVENT_NAME" = "pull_request" ] \
+            && [ "$HEAD_REF" = "release-please--branches--main" ] \
+            && [ "$HEAD_REPO" = "$GITHUB_REPOSITORY" ]; then
+            CHART_VERSION=$(awk '/^version:/ {print $2; exit}' charts/Chart.yaml)
+            VALUES_TAG=$(awk '/^ *tag:/ {print $2; exit}' charts/values.yaml)
+            if [ "$CHART_VERSION" != "$VALUES_TAG" ]; then
+              echo "charts/Chart.yaml declares version $CHART_VERSION but" \
+                   "charts/values.yaml requests image tag $VALUES_TAG." \
+                   "The deployed image would not be the released one."
+              exit 1
+            fi
+            echo "Release pull request for $CHART_VERSION, publishing the image ahead of the merge"
+            echo "push=true" >> "$GITHUB_OUTPUT"
+            echo "tag=v$CHART_VERSION" >> "$GITHUB_OUTPUT"
+          elif [ "$EVENT_NAME" = "push" ]; then
+            echo "push=true" >> "$GITHUB_OUTPUT"
+            echo "tag=main" >> "$GITHUB_OUTPUT"
+          else
+            echo "Ordinary pull request, building without publishing"
+            echo "push=false" >> "$GITHUB_OUTPUT"
+            echo "tag=" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log into registry ${{ env.REGISTRY }}
+        if: needs.plan.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build image for ${{ matrix.platform }}
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          cache-from: type=gha,scope=${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
+          # Each runner pushes an untagged, digest-only image. The tag is applied
+          # once, by the publish job, as a manifest list. Previously the AMD and
+          # ARM workflows each pushed the same tag independently, so whichever
+          # finished last overwrote the other and the released tag ended up
+          # single-architecture, with the surviving architecture decided by a
+          # race.
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=${{ needs.plan.outputs.push }}
+
+      - name: Record digest
+        if: needs.plan.outputs.push == 'true'
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${DIGEST#sha256:}"
+
+      - name: Upload digest
+        if: needs.plan.outputs.push == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ strategy.job-index }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: [plan, build]
+    if: needs.plan.outputs.push == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digest-*
+          merge-multiple: true
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: "v2.2.3"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log into registry ${{ env.REGISTRY }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Assemble the manifest list
+        working-directory: /tmp/digests
+        env:
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create \
+            --tag "${REGISTRY}/${IMAGE_NAME}:${TAG}" \
+            $(printf "${REGISTRY}/${IMAGE_NAME}@sha256:%s " *)
+
+      - name: Verify every architecture is present
+        env:
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: |
+          set -euo pipefail
+          IMAGE="${REGISTRY}/${IMAGE_NAME}:${TAG}"
+          docker buildx imagetools inspect "$IMAGE"
+          for PLATFORM in linux/amd64 linux/arm64; do
+            if ! docker buildx imagetools inspect --raw "$IMAGE" | grep -q "\"architecture\":\"${PLATFORM#linux/}\""; then
+              echo "$IMAGE has no $PLATFORM manifest"
+              exit 1
+            fi
+          done
+
+      - name: Sign the published image
+        env:
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: |
+          set -euo pipefail
+          IMAGE="${REGISTRY}/${IMAGE_NAME}:${TAG}"
+          DIGEST=$(docker buildx imagetools inspect "$IMAGE" --format '{{json .Manifest}}' | sed -n 's/.*"digest":"\(sha256:[0-9a-f]*\)".*/\1/p')
+          cosign sign --yes "${REGISTRY}/${IMAGE_NAME}@${DIGEST}"

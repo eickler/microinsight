@@ -1,0 +1,53 @@
+name: Promote the released container image
+
+# The image for a release is published from the release pull request, before it
+# is merged, so that charts/Chart.yaml on main never names an image that does
+# not exist yet. This workflow therefore only re-points "latest" and asserts
+# that the invariant held. It deliberately does not rebuild: rebuilding would
+# move the released tag to a new digest while Flux is already pulling it.
+
+on:
+  release:
+    types: [created]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log into registry ${{ env.REGISTRY }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Assert the released image already exists
+        run: |
+          set -euo pipefail
+          IMAGE="${REGISTRY}/${IMAGE_NAME}:${GITHUB_REF_NAME}"
+          if ! docker buildx imagetools inspect "$IMAGE" >/dev/null 2>&1; then
+            echo "$IMAGE does not exist."
+            echo "The release pull request is supposed to publish it before being merged."
+            echo "Check the 'Build and publish container image' run on that pull request."
+            exit 1
+          fi
+          docker buildx imagetools inspect "$IMAGE"
+
+      - name: Re-point latest at the released image
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create \
+            --tag "${REGISTRY}/${IMAGE_NAME}:latest" \
+            "${REGISTRY}/${IMAGE_NAME}:${GITHUB_REF_NAME}"
