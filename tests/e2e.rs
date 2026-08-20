@@ -22,13 +22,23 @@ async fn test_receive_data_e2e() {
     let db_url = format!("mysql://root:test@{}:{}/test", host, port);
     let database = Database::new(&db_url, 5000);
     database.create_tables();
-    let metrics_buffer = MetricsBuffer::new(60000, 5);
+    let interval_millis = 60000;
+    let metrics_buffer = MetricsBuffer::new(interval_millis, 5);
     let owner_buffer = OwnerBuffer::new(300, SystemTime::UNIX_EPOCH);
     let buffer_manager = BufferManager::new(metrics_buffer, owner_buffer);
 
     let server = Server::new(buffer_manager, database);
     let server_handle = tokio::spawn(server.run().await.expect("Failed to start server"));
     tokio::time::sleep(Duration::from_secs(5)).await;
+
+    // Prometheus reports sample timestamps in milliseconds. Use a bucket that is
+    // older than max_delay so that it is flushed by this write request.
+    let now_millis = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    let sample_millis = now_millis - 6 * interval_millis;
+    let expected_bucket_millis = (sample_millis / interval_millis) * interval_millis;
 
     let write_request = WriteRequest {
         timeseries: vec![TimeSeries {
@@ -56,7 +66,7 @@ async fn test_receive_data_e2e() {
             ],
             samples: vec![Sample {
                 value: 0.5,
-                timestamp: 60000, // Funny enough, Jan 1, 1970 0:00:00 UTC is not a valid timestamp in MySQL
+                timestamp: sample_millis as i64,
             }],
             exemplars: vec![],
             histograms: vec![],
@@ -86,13 +96,23 @@ async fn test_receive_data_e2e() {
     let opts = mysql::Opts::from_url(&db_url).expect("Invalid database URL");
     let pool = mysql::Pool::new(opts).expect("Failed to create database pool");
     let mut conn = pool.get_conn().unwrap();
-    let result: Option<(String, String, String, Option<f32>, Option<f32>, Option<f32>, Option<f32>)> = conn
-        .query_first("SELECT environment, pod, container, cpu_usage, cpu_limit, memory_usage, memory_limit FROM micrometrics LIMIT 1")
+    let result: Option<(
+        u64,
+        String,
+        String,
+        String,
+        Option<f32>,
+        Option<f32>,
+        Option<f32>,
+        Option<f32>,
+    )> = conn
+        .query_first("SELECT UNIX_TIMESTAMP(time), environment, pod, container, cpu_usage, cpu_limit, memory_usage, memory_limit FROM micrometrics LIMIT 1")
         .unwrap();
 
-    assert!(result.is_some());
-    let (environment, pod, container, _cpu_usage, _cpu_limit, _memory_usage, memory_limit) =
+    assert!(result.is_some(), "no row was written to micrometrics");
+    let (time, environment, pod, container, _cpu_usage, _cpu_limit, _memory_usage, memory_limit) =
         result.unwrap();
+    assert_eq!(time, expected_bucket_millis / 1000);
     assert_eq!(environment, "prod");
     assert_eq!(pod, "pod-1");
     assert_eq!(container, "container-1");

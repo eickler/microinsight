@@ -19,6 +19,8 @@ pub struct Metrics {
 }
 
 pub struct MetricsBuffer {
+    /// Bucket width in milliseconds, matching the unit of the sample timestamps
+    /// in the Prometheus remote write protocol.
     interval: u64,
     max_delay: usize,
     buffer: DashMap<Key, Arc<Mutex<Metrics>>>,
@@ -59,7 +61,7 @@ impl MetricsBuffer {
         let mut previous_cpu_usage_total = Option::None;
         if name == "cpu_usage_total" {
             let previous_key = Key {
-                timestamp: truncated_timestamp - self.interval,
+                timestamp: truncated_timestamp.saturating_sub(self.interval),
                 environment: key.environment.clone(),
                 pod: key.pod.clone(),
                 container: key.container.clone(),
@@ -98,8 +100,10 @@ impl MetricsBuffer {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_secs();
-        let threshold = self.truncate_timestamp(now) - self.interval * self.max_delay as u64;
+            .as_millis() as u64;
+        let threshold = self
+            .truncate_timestamp(now)
+            .saturating_sub(self.interval * self.max_delay as u64);
 
         self.buffer.retain(|key, value| {
             if key.timestamp < threshold {
@@ -306,15 +310,23 @@ mod tests {
         assert_eq!(metrics.memory_usage, Some(value));
     }
 
-    #[test]
-    fn test_flush_removes_old_entries() {
-        let buffer = MetricsBuffer::new(60, 5);
-        let now = std::time::SystemTime::now()
+    /// Prometheus remote write reports sample timestamps in milliseconds, and
+    /// `main.rs` scales `INTERVAL` by 1000 accordingly, so every value handled by
+    /// the buffer is in milliseconds. Keep the test in the same unit.
+    fn now_millis() -> u64 {
+        std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_secs();
-        let old_timestamp = now - 360; // Older than max_delay
-        let recent_timestamp = now - 120; // Within max_delay
+            .as_millis() as u64
+    }
+
+    #[test]
+    fn test_flush_removes_old_entries() {
+        let interval = 60_000;
+        let buffer = MetricsBuffer::new(interval, 5);
+        let now = now_millis();
+        let old_timestamp = now - 6 * interval; // Older than max_delay
+        let recent_timestamp = now - 2 * interval; // Within max_delay
 
         buffer.insert(
             "cpu_usage_total",
@@ -347,6 +359,70 @@ mod tests {
             pod: "pod1".to_string(),
             container: "container1".to_string(),
         }));
+    }
+
+    #[test]
+    fn test_flush_with_deployed_interval() {
+        // As deployed: INTERVAL=300 seconds, scaled to milliseconds by main.rs.
+        let interval = 300 * 1000;
+        let buffer = MetricsBuffer::new(interval, 5);
+        let now = now_millis();
+        let old_timestamp = now - 10 * interval;
+
+        buffer.insert(
+            "cpu_limit",
+            "env1",
+            "pod1",
+            "container1",
+            old_timestamp,
+            1.0,
+        );
+
+        let flushed = buffer.flush();
+
+        assert_eq!(
+            flushed.len(),
+            1,
+            "bucket older than max_delay was not flushed"
+        );
+        assert_eq!(buffer.buffer.len(), 0);
+    }
+
+    #[test]
+    fn test_flush_keeps_current_bucket() {
+        let interval = 300 * 1000;
+        let buffer = MetricsBuffer::new(interval, 5);
+        let now = now_millis();
+
+        buffer.insert("cpu_limit", "env1", "pod1", "container1", now, 1.0);
+
+        assert!(buffer.flush().is_empty());
+        assert_eq!(buffer.buffer.len(), 1);
+    }
+
+    #[test]
+    fn test_flush_near_epoch_does_not_panic() {
+        // Guards against underflow when the buffer holds timestamps close to the
+        // epoch, as the e2e test does.
+        let buffer = MetricsBuffer::new(60_000, 5);
+        buffer.insert("cpu_limit", "env1", "pod1", "container1", 0, 1.0);
+
+        let flushed = buffer.flush();
+
+        assert_eq!(flushed.len(), 1);
+    }
+
+    #[test]
+    fn test_insert_near_epoch_does_not_panic() {
+        // The previous-bucket lookup for the CPU delta must not underflow when the
+        // timestamp is younger than one interval.
+        let buffer = MetricsBuffer::new(60_000, 5);
+
+        buffer.insert("cpu_usage_total", "env1", "pod1", "container1", 0, 100.0);
+
+        let key = create_key(0);
+        let entry = buffer.buffer.get(&key).unwrap();
+        assert_eq!(entry.lock().unwrap().cpu_usage_total, Some(100.0));
     }
 
     #[test]
