@@ -181,5 +181,16 @@ jobs:
         run: |
           set -euo pipefail
           IMAGE="${REGISTRY}/${IMAGE_NAME}:${TAG}"
-          DIGEST=$(docker buildx imagetools inspect "$IMAGE" --format '{{json .Manifest}}' | sed -n 's/.*"digest":"\(sha256:[0-9a-f]*\)".*/\1/p')
+          # Parse with jq rather than matching text: imagetools prints the
+          # manifest pretty-printed, as `"digest": "sha256:..."`, so a pattern
+          # without the space silently yields nothing and cosign is handed a
+          # reference ending in a bare "@".
+          DIGEST=$(docker buildx imagetools inspect "$IMAGE" --format '{{json .Manifest}}' | jq -r '.digest')
+          case "$DIGEST" in
+            sha256:*) ;;
+            *)
+              echo "Could not read the digest of $IMAGE, got '$DIGEST'"
+              exit 1
+              ;;
+          esac
           cosign sign --yes "${REGISTRY}/${IMAGE_NAME}@${DIGEST}"
