@@ -41,6 +41,8 @@ spec:
                 secretKeyRef:
                   name: mysql-secret
                   key: DB_NAME
+            - name: DB_CONNECT_ATTEMPTS
+              value: "{{ .Values.db.attempts }}"
             - name: INTERVAL
               value: "{{ .Values.interval }}"
             - name: MAX_DELAY

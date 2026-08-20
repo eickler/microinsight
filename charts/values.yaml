@@ -8,6 +8,7 @@ db:
   user: mysql
   pass: mysql
   name: mydb
+  attempts: 10
 interval: 300
 maxdelay: 5
 loglevel: INFO
